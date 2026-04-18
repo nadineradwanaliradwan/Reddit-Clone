@@ -9,7 +9,7 @@ const router = express.Router();
 
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
-
+// Get community details by name (optional authentication)
 router.get('/:name',optionalProtect, getCommunity); // tested
 router.post('/',protect, createCommunity); //tested
 router.post('/:name/join', protect, joinCommunity); 
