@@ -37,6 +37,22 @@ A full-stack web application mirroring Reddit's core functionality. Currently th
 | POST | `/:name/join` | Join a community | Required |
 | POST | `/:name/leave` | Leave a community | Required |
 
+### Posts (`/reddit/posts`)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/` | Create a post (text, link, or image) in a community | Required — must be a member |
+| GET | `/community/:name` | List posts in a community (paginated: `?page=&limit=`) | Public (private communities: members only) |
+| GET | `/:id` | Get a single post by id | Public (private communities: members only) |
+| PATCH | `/:id` | Edit post content (title + type-specific field) | Author only |
+| DELETE | `/:id` | Soft-delete a post | Author only |
+
+**Post types & required fields**
+- `text` — `title`, `body` (max 40,000 chars)
+- `link` — `title`, `url` (http/https)
+- `image` — `title`, `imageUrl` (http/https; upload handling is out of scope — supply a hosted URL)
+
+Create requests also send `community` (the community name). The endpoint enforces `community.isArchived`, membership, and the community's `allowedPostTypes` setting. Deleted posts still respond 200 on GET but return redacted content (title becomes `[deleted]`, body/url/imageUrl are empty) and are excluded from list queries.
+
 ---
 
 ## Security Features
@@ -128,17 +144,20 @@ Reddit-Clone/
     ├── Models/
     │   ├── authModel.js            # User schema
     │   ├── communityModel.js       # Community schema (rules, flairs, types)
-    │   └── membershipModel.js      # User ↔ Community join table
+    │   ├── membershipModel.js      # User ↔ Community join table
+    │   └── postModel.js            # Post schema (text | link | image), soft delete
     ├── Controllers/
     │   ├── authController.js       # register, login, refresh, logout, me, forgot/reset password
     │   ├── userController.js       # updateProfile, changePassword
     │   ├── adminController.js      # getAllUsers, toggleUserStatus
-    │   └── communityController.js  # createCommunity, getCommunity, join, leave
+    │   ├── communityController.js  # createCommunity, getCommunity, join, leave
+    │   └── postController.js       # createPost, getPost, listPostsByCommunity, updatePost, deletePost
     ├── Routes/
     │   ├── authRoute.js
     │   ├── userRoute.js
     │   ├── adminRoute.js
-    │   └── communityRoute.js
+    │   ├── communityRoute.js
+    │   └── postRoute.js
     └── Middlewares/
         ├── authMiddleware.js        # protect (JWT verify) + restrictTo (RBAC)
         └── optionalProtect.js      # Like protect but never blocks — sets req.user or null

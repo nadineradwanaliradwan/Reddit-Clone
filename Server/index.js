@@ -7,6 +7,7 @@ const authRoutes = require('./Routes/authRoute');
 const userRoutes = require('./Routes/userRoute');
 const adminRoutes = require('./Routes/adminRoute');
 const communityRoutes = require('./Routes/communityRoute');
+const postRoutes = require('./Routes/postRoute');
 const { protect } = require('./Middlewares/authMiddleware');
 const dotenv = require('dotenv');
 const path = require('path');
@@ -37,6 +38,7 @@ app.use('/reddit/auth', authLimiter, authRoutes);
 app.use('/reddit/users', protect, userRoutes);
 app.use('/reddit/admin', adminRoutes);
 app.use('/reddit/communities', communityRoutes);
+app.use('/reddit/posts', postRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
