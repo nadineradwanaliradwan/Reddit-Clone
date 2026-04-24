@@ -1,6 +1,8 @@
+const mongoose = require('mongoose');
 const { validationResult } = require('express-validator');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
+const Post = require('../Models/postModel');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -223,4 +225,158 @@ const getCommunity = async (req, res) => {
   }
 };
 
-module.exports = { createCommunity, joinCommunity, leaveCommunity, getCommunity };
+// ─── Flair management helpers ────────────────────────────────────────────────
+
+const isValidObjectId = (id) =>
+  typeof id === 'string' && mongoose.Types.ObjectId.isValid(id);
+
+// Permissive hex-color check — accepts #rgb, #rrggbb, or #rrggbbaa
+const isHexColor = (s) => typeof s === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s);
+
+// Resolve the community by name and confirm the caller is a moderator.
+// Returns { community, error } where `error` is a ready-to-send { status, body } on failure.
+const loadCommunityAsModerator = async (name, userId) => {
+  const community = await Community.findOne({ name: String(name).toLowerCase() });
+  if (!community)
+    return { error: { status: 404, body: { success: false, message: 'Community not found' } } };
+
+  const membership = await Membership.findOne({ user: userId, community: community._id });
+  if (!membership || membership.role !== 'moderator')
+    return { error: { status: 403, body: { success: false, message: 'Only moderators can manage flairs' } } };
+
+  return { community };
+};
+
+// ─── @route  POST /reddit/communities/:name/flairs ───────────────────────────
+// ─── @access Private (moderators only) ───────────────────────────────────────
+const createFlair = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json({ success: false, errors: errors.array() });
+
+  const { name: flairName, textColor, backgroundColor } = req.body;
+
+  try {
+    const { community, error } = await loadCommunityAsModerator(req.params.name, req.user.id);
+    if (error) return res.status(error.status).json(error.body);
+
+    if (community.flairs.length >= MAX_FLAIRS)
+      return res.status(400).json({
+        success: false,
+        message: `Communities can have at most ${MAX_FLAIRS} flairs`,
+      });
+
+    // Reject duplicate flair names (case-insensitive) within the same community —
+    // two flairs called "News" would be confusing to pick from in a UI.
+    const trimmedName = flairName.trim();
+    const duplicate = community.flairs.some(
+      f => f.name.toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (duplicate)
+      return res.status(409).json({ success: false, message: 'A flair with that name already exists' });
+
+    const flair = { name: trimmedName };
+    if (textColor)       flair.textColor = textColor;
+    if (backgroundColor) flair.backgroundColor = backgroundColor;
+
+    community.flairs.push(flair);
+    await community.save();
+
+    // The just-pushed flair is the last element; Mongoose assigned it an _id on save.
+    const created = community.flairs[community.flairs.length - 1];
+
+    res.status(201).json({ success: true, message: 'Flair created', flair: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// ─── @route  PATCH /reddit/communities/:name/flairs/:flairId ─────────────────
+// ─── @access Private (moderators only) ───────────────────────────────────────
+const updateFlair = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json({ success: false, errors: errors.array() });
+
+  const { flairId } = req.params;
+  if (!isValidObjectId(flairId))
+    return res.status(404).json({ success: false, message: 'Flair not found' });
+
+  const { name: flairName, textColor, backgroundColor } = req.body;
+
+  try {
+    const { community, error } = await loadCommunityAsModerator(req.params.name, req.user.id);
+    if (error) return res.status(error.status).json(error.body);
+
+    const flair = community.flairs.id(flairId);
+    if (!flair)
+      return res.status(404).json({ success: false, message: 'Flair not found' });
+
+    // Name change needs the same uniqueness check as create — but ignore the flair we're editing
+    if (typeof flairName === 'string') {
+      const trimmed = flairName.trim();
+      if (!trimmed)
+        return res.status(400).json({ success: false, message: 'Flair name cannot be empty' });
+
+      const clashes = community.flairs.some(
+        f => !f._id.equals(flair._id) && f.name.toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (clashes)
+        return res.status(409).json({ success: false, message: 'A flair with that name already exists' });
+
+      flair.name = trimmed;
+    }
+
+    if (typeof textColor === 'string')       flair.textColor = textColor;
+    if (typeof backgroundColor === 'string') flair.backgroundColor = backgroundColor;
+
+    await community.save();
+
+    res.status(200).json({ success: true, message: 'Flair updated', flair });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// ─── @route  DELETE /reddit/communities/:name/flairs/:flairId ────────────────
+// ─── @access Private (moderators only) ───────────────────────────────────────
+const deleteFlair = async (req, res) => {
+  const { flairId } = req.params;
+  if (!isValidObjectId(flairId))
+    return res.status(404).json({ success: false, message: 'Flair not found' });
+
+  try {
+    const { community, error } = await loadCommunityAsModerator(req.params.name, req.user.id);
+    if (error) return res.status(error.status).json(error.body);
+
+    const flair = community.flairs.id(flairId);
+    if (!flair)
+      return res.status(404).json({ success: false, message: 'Flair not found' });
+
+    // Using .pull to remove the subdoc by _id — cleaner than filtering the array by hand
+    community.flairs.pull(flairId);
+    await community.save();
+
+    // Posts that referenced this flair would now point at a non-existent subdoc,
+    // which would confuse the ?flair=<id> filter and the read path. Null them out
+    // so the posts themselves remain intact but become unflaired.
+    await Post.updateMany(
+      { community: community._id, flair: flairId },
+      { $set: { flair: null } },
+    );
+
+    res.status(200).json({ success: true, message: 'Flair deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = {
+  createCommunity,
+  joinCommunity,
+  leaveCommunity,
+  getCommunity,
+  createFlair,
+  updateFlair,
+  deleteFlair,
+};

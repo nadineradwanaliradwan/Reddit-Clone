@@ -9,6 +9,16 @@ const Membership = require('../Models/membershipModel');
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE     = 50;
 
+// Time-range filter windows, in milliseconds. 'all' is absent on purpose —
+// it means "no time filter at all".
+const TIME_RANGE_MS = {
+  hour:  60 * 60 * 1000,
+  day:   24 * 60 * 60 * 1000,
+  week:   7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+  year: 365 * 24 * 60 * 60 * 1000,
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const isValidObjectId = (id) =>
@@ -46,6 +56,15 @@ const isPostTypeAllowed = (community, postType) => {
   return community.allowedPostTypes === postType;
 };
 
+// A flair is only valid for a post if the community defines one with that id.
+// Returns true when `flairId` is falsy (no flair chosen) or when it matches a
+// subdoc in community.flairs.
+const isFlairValidForCommunity = (community, flairId) => {
+  if (!flairId) return true;
+  if (!isValidObjectId(flairId)) return false;
+  return community.flairs.some(f => f._id.equals(flairId));
+};
+
 // ─── @route  POST /reddit/posts ──────────────────────────────────────────────
 // ─── @access Private ─────────────────────────────────────────────────────────
 const createPost = async (req, res) => {
@@ -53,7 +72,7 @@ const createPost = async (req, res) => {
   if (!errors.isEmpty())
     return res.status(400).json({ success: false, errors: errors.array() });
 
-  const { community: communityName, type, title, body, url, imageUrl } = req.body;
+  const { community: communityName, type, title, body, url, imageUrl, flair } = req.body;
 
   try {
     const community = await Community.findOne({ name: String(communityName).toLowerCase() });
@@ -74,6 +93,10 @@ const createPost = async (req, res) => {
         message: `This community only allows '${community.allowedPostTypes}' posts`,
       });
 
+    // Flair is optional — reject only if one was supplied and it doesn't belong to this community
+    if (flair && !isFlairValidForCommunity(community, flair))
+      return res.status(400).json({ success: false, message: 'Invalid flair for this community' });
+
     // Build the doc with only the fields relevant to the chosen type — keeps the
     // stored document tidy and avoids accidentally persisting a stray url on a text post.
     const doc = {
@@ -85,6 +108,7 @@ const createPost = async (req, res) => {
     if (type === 'text')  doc.body     = body;
     if (type === 'link')  doc.url      = url;
     if (type === 'image') doc.imageUrl = imageUrl;
+    if (flair)            doc.flair    = flair;
 
     const post = await Post.create(doc);
 
@@ -138,6 +162,15 @@ const getPost = async (req, res) => {
 
 // ─── @route  GET /reddit/posts/community/:name ───────────────────────────────
 // ─── @access Public (private communities: members only) ──────────────────────
+// ─── @query  page, limit, sort (new|old), type, flair, t ─────────────────────
+//
+// Filters (all optional):
+//   type   — 'text' | 'link' | 'image'                              — post type
+//   flair  — <flairId> | 'none'                                     — specific flair, or only unflaired
+//   t      — 'hour' | 'day' | 'week' | 'month' | 'year' | 'all'     — time window (default 'all')
+//
+// Invalid filter values are rejected with 400 rather than silently ignored — clients
+// shouldn't receive a different result set than the one they asked for without knowing.
 const listPostsByCommunity = async (req, res) => {
   const { name } = req.params;
   const userId = req.user ? req.user.id : null;
@@ -150,26 +183,89 @@ const listPostsByCommunity = async (req, res) => {
   );
   const skip = (page - 1) * limit;
 
+  // sort=new (default) → newest first; sort=old → oldest first
+  const VALID_SORTS = ['new', 'old'];
+  const sortParam = VALID_SORTS.includes(req.query.sort) ? req.query.sort : 'new';
+  const sortOrder = sortParam === 'old' ? 1 : -1;
+
+  // ── Filter validation ─────────────────────────────────────────────────────
+  // type — strict check, reject unknown values loudly
+  if (req.query.type !== undefined && !Post.POST_TYPES.includes(req.query.type))
+    return res.status(400).json({
+      success: false,
+      message: `type must be one of ${Post.POST_TYPES.join(', ')}`,
+    });
+  const typeFilter = req.query.type || null;
+
+  // flair — 'none' means "no flair", otherwise must be a real ObjectId.
+  // Whether that id actually belongs to the community is checked below, once we have the community.
+  const rawFlair = req.query.flair;
+  if (rawFlair !== undefined && rawFlair !== 'none' && !isValidObjectId(rawFlair))
+    return res.status(400).json({ success: false, message: 'flair must be a valid id or "none"' });
+  const flairFilter = rawFlair || null;
+
+  // t — time window. 'all' (or missing) means "no time filter".
+  const rawTime = req.query.t;
+  const timeKey = rawTime === undefined || rawTime === 'all' ? null : rawTime;
+  if (timeKey && !Object.prototype.hasOwnProperty.call(TIME_RANGE_MS, timeKey))
+    return res.status(400).json({
+      success: false,
+      message: `t must be one of ${Object.keys(TIME_RANGE_MS).join(', ')}, or 'all'`,
+    });
+
   try {
     const { community } = await findViewableCommunity(name, userId);
     if (!community)
       return res.status(404).json({ success: false, message: 'Community not found' });
 
+    // A specific flair id must belong to this community; otherwise it's always an empty result.
+    // Return 400 instead of an empty list so the client knows their filter is wrong.
+    if (flairFilter && flairFilter !== 'none' && !isFlairValidForCommunity(community, flairFilter))
+      return res.status(400).json({ success: false, message: 'Unknown flair for this community' });
+
     // Exclude soft-deleted posts from the list view (they're still fetchable by id)
     const filter = { community: community._id, isDeleted: false };
+    if (typeFilter) filter.type = typeFilter;
 
-    const [posts, total] = await Promise.all([
+    if (flairFilter === 'none')   filter.flair = null;
+    else if (flairFilter)         filter.flair = flairFilter;
+
+    if (timeKey) {
+      filter.createdAt = { $gte: new Date(Date.now() - TIME_RANGE_MS[timeKey]) };
+    }
+
+    const [posts, total, membership] = await Promise.all([
       Post.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: sortOrder })
         .skip(skip)
         .limit(limit)
         .populate('author', 'username')
         .populate('community', 'name type'),
       Post.countDocuments(filter),
+      userId ? Membership.findOne({ user: userId, community: community._id }) : Promise.resolve(null),
     ]);
 
     res.status(200).json({
       success: true,
+      community: {
+        name: community.name,
+        description: community.description,
+        type: community.type,
+        memberCount: community.memberCount,
+        icon: community.icon,
+        banner: community.banner,
+        isNSFW: community.isNSFW,
+        isArchived: community.isArchived,
+        allowedPostTypes: community.allowedPostTypes,
+        flairs: community.flairs, // surfaced so clients can build a flair-filter UI
+        createdAt: community.createdAt,
+      },
+      isMember: !!membership,
+      memberRole: membership ? membership.role : null,
+      sort: sortParam,
+      typeFilter,
+      flairFilter,
+      timeFilter: timeKey || 'all',
       page,
       limit,
       total,
@@ -206,7 +302,7 @@ const updatePost = async (req, res) => {
 
     // Only let the author touch the content fields relevant to the post type.
     // Title is universal; the rest is type-scoped so a text post can't suddenly grow a url.
-    const { title, body, url, imageUrl } = req.body;
+    const { title, body, url, imageUrl, flair } = req.body;
 
     if (typeof title === 'string') post.title = title;
 
@@ -216,6 +312,16 @@ const updatePost = async (req, res) => {
       post.url = url;
     } else if (post.type === 'image' && typeof imageUrl === 'string') {
       post.imageUrl = imageUrl;
+    }
+
+    // Flair is optional — `null` / '' clears it, a valid id sets it, anything else is rejected.
+    // We compare against the post's community so you can't "steal" a flair from another community.
+    if (flair === null || flair === '') {
+      post.flair = null;
+    } else if (typeof flair === 'string') {
+      if (!community || !isFlairValidForCommunity(community, flair))
+        return res.status(400).json({ success: false, message: 'Invalid flair for this community' });
+      post.flair = flair;
     }
 
     await post.save();

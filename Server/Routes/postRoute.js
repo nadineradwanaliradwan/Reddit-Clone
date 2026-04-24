@@ -56,6 +56,11 @@ const createPostValidation = [
     .notEmpty().withMessage('Image posts must include an image URL')
     .isURL({ protocols: ['http', 'https'], require_protocol: true })
     .withMessage('imageUrl must be a valid http(s) URL'),
+
+  // Optional flair id — the controller confirms it actually belongs to the target community
+  body('flair')
+    .optional({ nullable: true })
+    .isMongoId().withMessage('Flair must be a valid id'),
 ];
 
 // Update doesn't let you change type — only the content fields corresponding to the stored type.
@@ -86,6 +91,17 @@ const updatePostValidation = [
     .trim()
     .isURL({ protocols: ['http', 'https'], require_protocol: true })
     .withMessage('imageUrl must be a valid http(s) URL'),
+
+  // Flair can be set (mongo id), cleared (null or empty string), or left alone (omitted).
+  // Only validate format when it's a non-empty string.
+  body('flair')
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === '' || value === null) return true;
+      // Defer to isMongoId-style check
+      return /^[a-f\d]{24}$/i.test(String(value));
+    })
+    .withMessage('Flair must be a valid id, null, or empty string'),
 ];
 
 // ─── Routes ──────────────────────────────────────────────────────────────────

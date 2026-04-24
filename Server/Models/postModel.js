@@ -102,6 +102,15 @@ const postSchema = new mongoose.Schema(
       },
     },
 
+    // Optional flair — references an entry in the owning community's `flairs` subdoc array.
+    // Nullable on purpose: most posts won't be flaired. Verified against the community on
+    // create/update so we never end up with a flair id that doesn't belong to the community.
+    flair: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+
     // Soft delete — keeps the document so comments / references stay valid
     isDeleted: {
       type: Boolean,
@@ -122,6 +131,12 @@ const postSchema = new mongoose.Schema(
 
 // Feed query: "give me r/xxx's newest posts"
 postSchema.index({ community: 1, isDeleted: 1, createdAt: -1 });
+
+// Filtered feed: "give me r/xxx's newest text posts" or "...with flair X"
+// Both optional filters — the index stays useful for plain feed queries because
+// Mongo can still seek on (community, isDeleted, createdAt) as a prefix-style scan.
+postSchema.index({ community: 1, isDeleted: 1, type: 1, createdAt: -1 });
+postSchema.index({ community: 1, isDeleted: 1, flair: 1, createdAt: -1 });
 
 // Profile query: "give me this user's newest posts"
 postSchema.index({ author: 1, createdAt: -1 });

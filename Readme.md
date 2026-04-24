@@ -36,14 +36,24 @@ A full-stack web application mirroring Reddit's core functionality. Currently th
 | POST | `/` | Create a new community | Required |
 | POST | `/:name/join` | Join a community | Required |
 | POST | `/:name/leave` | Leave a community | Required |
+| POST | `/:name/flairs` | Add a flair to the community | Moderator only |
+| PATCH | `/:name/flairs/:flairId` | Rename / recolor a flair | Moderator only |
+| DELETE | `/:name/flairs/:flairId` | Remove a flair (posts using it are unflaired) | Moderator only |
+
+**Flair fields**
+- `name` — required, up to 64 chars, must be unique within the community (case-insensitive)
+- `textColor` — optional, hex (`#ffffff`, `#fff`, or `#ffffffff`); defaults to `#ffffff`
+- `backgroundColor` — optional, hex; defaults to `#0079d3`
+
+Communities can have at most 100 flairs. Deleting a flair also clears `flair: null` on every post that referenced it, so no post ends up pointing at a flair that no longer exists.
 
 ### Posts (`/reddit/posts`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | POST | `/` | Create a post (text, link, or image) in a community | Required — must be a member |
-| GET | `/community/:name` | List posts in a community (paginated: `?page=&limit=`) | Public (private communities: members only) |
+| GET | `/community/:name` | List posts in a community (paginated + filterable) | Public (private communities: members only) |
 | GET | `/:id` | Get a single post by id | Public (private communities: members only) |
-| PATCH | `/:id` | Edit post content (title + type-specific field) | Author only |
+| PATCH | `/:id` | Edit post content (title, type-specific field, flair) | Author only |
 | DELETE | `/:id` | Soft-delete a post | Author only |
 
 **Post types & required fields**
@@ -51,7 +61,20 @@ A full-stack web application mirroring Reddit's core functionality. Currently th
 - `link` — `title`, `url` (http/https)
 - `image` — `title`, `imageUrl` (http/https; upload handling is out of scope — supply a hosted URL)
 
-Create requests also send `community` (the community name). The endpoint enforces `community.isArchived`, membership, and the community's `allowedPostTypes` setting. Deleted posts still respond 200 on GET but return redacted content (title becomes `[deleted]`, body/url/imageUrl are empty) and are excluded from list queries.
+Create and update requests may also include an optional `flair` — the `_id` of a flair defined on the target community (or `null` / `""` on update to clear it). Create requests send `community` (the community name). The endpoint enforces `community.isArchived`, membership, and the community's `allowedPostTypes` setting. Deleted posts still respond 200 on GET but return redacted content (title becomes `[deleted]`, body/url/imageUrl are empty) and are excluded from list queries.
+
+**Query params on `GET /community/:name`**
+
+| Param | Values | Default | Notes |
+|-------|--------|---------|-------|
+| `page` | integer ≥ 1 | `1` | 1-indexed page number |
+| `limit` | integer 1–50 | `20` | Page size, capped at 50 |
+| `sort` | `new` \| `old` | `new` | Newest-first or oldest-first |
+| `type` | `text` \| `link` \| `image` | — | Filter by post type |
+| `flair` | `<flairId>` \| `none` | — | Specific flair id, or `none` for unflaired posts only |
+| `t` | `hour` \| `day` \| `week` \| `month` \| `year` \| `all` | `all` | Only posts created within the window |
+
+Invalid filter values return `400` rather than being silently ignored. The response echoes back the active filters (`sort`, `typeFilter`, `flairFilter`, `timeFilter`) and includes the community's `flairs` array so clients can render a flair-filter UI.
 
 ---
 
