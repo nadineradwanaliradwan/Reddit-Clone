@@ -9,6 +9,9 @@ const {
   listPostsByCommunity,
   updatePost,
   deletePost,
+  listFeed,
+  savePost,
+  unsavePost,
 } = require('../Controllers/postController');
 
 const router = express.Router();
@@ -105,15 +108,28 @@ const updatePostValidation = [
 ];
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
+//
+// IMPORTANT: more specific paths (`/feed`, `/community/:name`, `/:id/save`)
+// must be registered BEFORE the catch-all `/:id` routes, or Express will
+// interpret `feed` / `save` as a post id and dispatch to the wrong handler.
 
-// List posts in a community — optionalProtect so private communities stay hidden from non-members.
-// Path sits under /community/:name to keep it unambiguous with GET /:id.
+// ── Feed (home / popular / saved) ───────────────────────────────────────────
+// optionalProtect lets anonymous users hit `?scope=popular`; the controller
+// rejects anonymous home/saved requests with 401.
+router.get('/feed', optionalProtect, listFeed);
+
+// ── Community feed ──────────────────────────────────────────────────────────
 router.get('/community/:name', optionalProtect, listPostsByCommunity);
 
-// Fetch a single post by its Mongo ObjectId
+// ── Save / unsave ──────────────────────────────────────────────────────────
+// Sub-paths of `/:id`, so they MUST come before the bare `/:id` routes below.
+router.post('/:id/save',   protect, savePost);
+router.delete('/:id/save', protect, unsavePost);
+
+// ── Single post ────────────────────────────────────────────────────────────
 router.get('/:id', optionalProtect, getPost);
 
-// Author-only mutations
+// ── Author-only mutations ──────────────────────────────────────────────────
 router.post('/',        protect, createPostValidation, createPost);
 router.patch('/:id',    protect, updatePostValidation, updatePost);
 router.delete('/:id',   protect, deletePost);

@@ -51,10 +51,13 @@ Communities can have at most 100 flairs. Deleting a flair also clears `flair: nu
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | POST | `/` | Create a post (text, link, or image) in a community | Required — must be a member |
+| GET | `/feed` | Cross-community feed: `home`, `popular`, or `saved` (see below) | `popular` is public; `home` / `saved` require auth |
 | GET | `/community/:name` | List posts in a community (paginated + filterable) | Public (private communities: members only) |
 | GET | `/:id` | Get a single post by id | Public (private communities: members only) |
 | PATCH | `/:id` | Edit post content (title, type-specific field, flair) | Author only |
 | DELETE | `/:id` | Soft-delete a post | Author only |
+| POST | `/:id/save` | Save a post to the user's saved feed (idempotent) | Required |
+| DELETE | `/:id/save` | Remove a post from the user's saved feed (idempotent) | Required |
 
 **Post types & required fields**
 - `text` — `title`, `body` (max 40,000 chars)
@@ -75,6 +78,22 @@ Create and update requests may also include an optional `flair` — the `_id` of
 | `t` | `hour` \| `day` \| `week` \| `month` \| `year` \| `all` | `all` | Only posts created within the window |
 
 Invalid filter values return `400` rather than being silently ignored. The response echoes back the active filters (`sort`, `typeFilter`, `flairFilter`, `timeFilter`) and includes the community's `flairs` array so clients can render a flair-filter UI.
+
+**Feed page — `GET /feed`**
+
+A single endpoint serves three feed scopes via the `?scope=` query param:
+
+| Scope | Source of posts | Auth |
+|-------|------------------|------|
+| `popular` *(default)* | Every **public** community | Public |
+| `home` | Communities the logged-in user has joined | Required |
+| `saved` | Posts the logged-in user has saved (sorted by save time) | Required |
+
+The same query params from the community feed are accepted (`page`, `limit`, `sort`, `type`, `flair`, `t`) with identical validation rules. A `flair` id is community-scoped, so passing one effectively narrows the feed to a single community — useful but unusual; pass `flair=none` to show only unflaired posts. Anonymous requests to `home` or `saved` get `401`. The response shape matches `/community/:name` minus the `community` block, plus a `scope` field echoing back the chosen scope.
+
+**Save / unsave — `POST` and `DELETE /:id/save`**
+
+Both endpoints are **idempotent**: re-saving an already-saved post returns `200` with `alreadySaved: true`, and unsaving a non-saved post returns `200` with `alreadyUnsaved: true`. A unique compound index on `(user, post)` prevents duplicate save records at the database level.
 
 ---
 
@@ -168,13 +187,14 @@ Reddit-Clone/
     │   ├── authModel.js            # User schema
     │   ├── communityModel.js       # Community schema (rules, flairs, types)
     │   ├── membershipModel.js      # User ↔ Community join table
-    │   └── postModel.js            # Post schema (text | link | image), soft delete
+    │   ├── postModel.js            # Post schema (text | link | image), soft delete
+    │   └── savedPostModel.js       # User ↔ Post join table for the saved feed
     ├── Controllers/
     │   ├── authController.js       # register, login, refresh, logout, me, forgot/reset password
     │   ├── userController.js       # updateProfile, changePassword
     │   ├── adminController.js      # getAllUsers, toggleUserStatus
-    │   ├── communityController.js  # createCommunity, getCommunity, join, leave
-    │   └── postController.js       # createPost, getPost, listPostsByCommunity, updatePost, deletePost
+    │   ├── communityController.js  # createCommunity, getCommunity, join, leave, flair CRUD
+    │   └── postController.js       # createPost, getPost, listPostsByCommunity, updatePost, deletePost, listFeed, savePost, unsavePost
     ├── Routes/
     │   ├── authRoute.js
     │   ├── userRoute.js

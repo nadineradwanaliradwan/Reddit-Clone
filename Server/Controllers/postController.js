@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const Post = require('../Models/postModel');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
+const SavedPost = require('../Models/savedPostModel');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -370,10 +371,247 @@ const deletePost = async (req, res) => {
   }
 };
 
+// ─── @route  GET /reddit/posts/feed ──────────────────────────────────────────
+// ─── @access Public for `popular`, Private for `home` and `saved` ────────────
+// ─── @query  scope, page, limit, sort (new|old), type, flair, t ──────────────
+//
+// Single endpoint serving three feed scopes:
+//   home    — posts from communities the logged-in user has joined.
+//             Requires auth. Returns an empty list if the user is in zero communities.
+//   popular — posts from every PUBLIC community. Anonymous-friendly.
+//   saved   — posts the logged-in user has saved (via POST /:id/save).
+//             Requires auth. Sorted by save time, not post-creation time, so the
+//             newest *save* shows first regardless of the post's age.
+//
+// All three reuse the same filter contract as listPostsByCommunity:
+//   type, flair (+ 'none'), t (time window). Invalid filter values → 400.
+//
+// Note on `flair` across communities: a flair id is community-scoped. We accept
+// it because the user explicitly asked for it — passing one will just narrow the
+// feed to posts in the single community that owns that flair id. 'none' returns
+// every unflaired post in the feed scope, which is broadly useful.
+const listFeed = async (req, res) => {
+  const userId = req.user ? req.user.id : null;
+
+  // ── scope ─────────────────────────────────────────────────────────────────
+  const VALID_SCOPES = ['home', 'popular', 'saved'];
+  const scope = VALID_SCOPES.includes(req.query.scope) ? req.query.scope : 'popular';
+  if ((scope === 'home' || scope === 'saved') && !userId)
+    return res.status(401).json({
+      success: false,
+      message: `Authentication required for the '${scope}' feed`,
+    });
+
+  // ── paging ────────────────────────────────────────────────────────────────
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, parseInt(req.query.limit, 10) || DEFAULT_PAGE_SIZE),
+  );
+  const skip = (page - 1) * limit;
+
+  // ── sort ──────────────────────────────────────────────────────────────────
+  const VALID_SORTS = ['new', 'old'];
+  const sortParam = VALID_SORTS.includes(req.query.sort) ? req.query.sort : 'new';
+  const sortOrder = sortParam === 'old' ? 1 : -1;
+
+  // ── filter validation (mirrors listPostsByCommunity) ──────────────────────
+  if (req.query.type !== undefined && !Post.POST_TYPES.includes(req.query.type))
+    return res.status(400).json({
+      success: false,
+      message: `type must be one of ${Post.POST_TYPES.join(', ')}`,
+    });
+  const typeFilter = req.query.type || null;
+
+  const rawFlair = req.query.flair;
+  if (rawFlair !== undefined && rawFlair !== 'none' && !isValidObjectId(rawFlair))
+    return res.status(400).json({ success: false, message: 'flair must be a valid id or "none"' });
+  const flairFilter = rawFlair || null;
+
+  const rawTime = req.query.t;
+  const timeKey = rawTime === undefined || rawTime === 'all' ? null : rawTime;
+  if (timeKey && !Object.prototype.hasOwnProperty.call(TIME_RANGE_MS, timeKey))
+    return res.status(400).json({
+      success: false,
+      message: `t must be one of ${Object.keys(TIME_RANGE_MS).join(', ')}, or 'all'`,
+    });
+
+  try {
+    // Base filter — exclude soft-deleted posts from every feed
+    const filter = { isDeleted: false };
+    if (typeFilter) filter.type = typeFilter;
+    if (flairFilter === 'none')   filter.flair = null;
+    else if (flairFilter)         filter.flair = flairFilter;
+    if (timeKey)
+      filter.createdAt = { $gte: new Date(Date.now() - TIME_RANGE_MS[timeKey]) };
+
+    // ── scope-specific narrowing ────────────────────────────────────────────
+    // For 'saved' we keep the SavedPost docs around so we can sort by savedAt
+    // *after* fetching the matching posts.
+    let savedDocsForOrdering = null;
+
+    if (scope === 'home') {
+      const memberships = await Membership.find({ user: userId }).select('community');
+      const communityIds = memberships.map(m => m.community);
+      // Empty membership list → empty feed (don't even hit the Post collection)
+      if (communityIds.length === 0)
+        return res.status(200).json(emptyFeedResponse({ scope, sortParam, typeFilter, flairFilter, timeKey, page, limit }));
+      filter.community = { $in: communityIds };
+
+    } else if (scope === 'popular') {
+      // Anon-safe: only posts in PUBLIC communities. Restricted/private are excluded
+      // even for logged-in members, since 'popular' is meant to be the open firehose.
+      const publics = await Community.find({ type: 'public' }).select('_id');
+      filter.community = { $in: publics.map(c => c._id) };
+
+    } else { // scope === 'saved'
+      // Pull every save for this user — pre-sorted so we can preserve order later
+      savedDocsForOrdering = await SavedPost.find({ user: userId })
+        .select('post savedAt')
+        .sort({ savedAt: sortOrder });
+      const postIds = savedDocsForOrdering.map(s => s.post);
+      if (postIds.length === 0)
+        return res.status(200).json(emptyFeedResponse({ scope, sortParam, typeFilter, flairFilter, timeKey, page, limit }));
+      filter._id = { $in: postIds };
+
+      // Security: hide saves the user can no longer access (e.g. left a private community).
+      // Keep posts whose community is public/restricted OR where the user is still a member.
+      const memberCommunityIds = (
+        await Membership.find({ user: userId }).select('community')
+      ).map(m => m.community);
+      const accessibleCommunityIds = (
+        await Community.find({
+          $or: [
+            { type: { $in: ['public', 'restricted'] } },
+            { _id: { $in: memberCommunityIds } },
+          ],
+        }).select('_id')
+      ).map(c => c._id);
+      filter.community = { $in: accessibleCommunityIds };
+    }
+
+    // ── fetch ────────────────────────────────────────────────────────────────
+    const total = await Post.countDocuments(filter);
+
+    let posts;
+    if (scope === 'saved') {
+      // Saved feed sorts by savedAt, not createdAt. Easiest approach: fetch all
+      // matching posts (already narrowed by _id $in), then re-order in JS using
+      // the pre-sorted savedDocsForOrdering, then paginate.
+      const all = await Post.find(filter)
+        .populate('author', 'username')
+        .populate('community', 'name type');
+
+      const byId = new Map(all.map(p => [String(p._id), p]));
+      const ordered = savedDocsForOrdering
+        .map(s => byId.get(String(s.post)))
+        .filter(Boolean); // drop any saves whose posts got filtered out (deleted, type/flair/t mismatch, no access)
+
+      posts = ordered.slice(skip, skip + limit);
+    } else {
+      posts = await Post.find(filter)
+        .sort({ createdAt: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .populate('author', 'username')
+        .populate('community', 'name type');
+    }
+
+    res.status(200).json({
+      success: true,
+      scope,
+      sort: sortParam,
+      typeFilter,
+      flairFilter,
+      timeFilter: timeKey || 'all',
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      posts,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// Helper — empty feed response that still echoes back the active filters so the
+// client doesn't have to re-derive what was applied.
+const emptyFeedResponse = ({ scope, sortParam, typeFilter, flairFilter, timeKey, page, limit }) => ({
+  success: true,
+  scope,
+  sort: sortParam,
+  typeFilter,
+  flairFilter,
+  timeFilter: timeKey || 'all',
+  page,
+  limit,
+  total: 0,
+  totalPages: 0,
+  posts: [],
+});
+
+// ─── @route  POST /reddit/posts/:id/save ─────────────────────────────────────
+// ─── @access Private ─────────────────────────────────────────────────────────
+//
+// Saves a post for the logged-in user. Idempotent: re-saving an already-saved
+// post returns 200 with `alreadySaved: true` rather than 409 — matches Reddit's
+// behavior and keeps clients from having to track local state.
+const savePost = async (req, res) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id))
+    return res.status(404).json({ success: false, message: 'Post not found' });
+
+  try {
+    const post = await Post.findById(id).populate('community', 'type');
+    if (!post || post.isDeleted)
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    // Don't let users save posts they aren't allowed to view in the first place
+    if (!(await canUserViewPostInCommunity(post.community, req.user.id)))
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    try {
+      await SavedPost.create({ user: req.user.id, post: post._id });
+      return res.status(201).json({ success: true, message: 'Post saved' });
+    } catch (err) {
+      // Duplicate key on (user, post) — already saved; treat as success
+      if (err.code === 11000)
+        return res.status(200).json({ success: true, message: 'Post already saved', alreadySaved: true });
+      throw err;
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// ─── @route  DELETE /reddit/posts/:id/save ───────────────────────────────────
+// ─── @access Private ─────────────────────────────────────────────────────────
+//
+// Unsaves a post for the logged-in user. Idempotent: unsaving a post that
+// wasn't saved returns 200 with `alreadyUnsaved: true`.
+const unsavePost = async (req, res) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id))
+    return res.status(404).json({ success: false, message: 'Post not found' });
+
+  try {
+    const result = await SavedPost.deleteOne({ user: req.user.id, post: id });
+    if (result.deletedCount === 0)
+      return res.status(200).json({ success: true, message: 'Post was not saved', alreadyUnsaved: true });
+    res.status(200).json({ success: true, message: 'Post unsaved' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
 module.exports = {
   createPost,
   getPost,
   listPostsByCommunity,
   updatePost,
   deletePost,
+  listFeed,
+  savePost,
+  unsavePost,
 };
