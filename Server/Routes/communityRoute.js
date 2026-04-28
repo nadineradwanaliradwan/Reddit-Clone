@@ -55,13 +55,13 @@ const updateFlairValidation = [
 // Get community details by name (optional authentication)
 router.get('/:name',optionalProtect, getCommunity); // tested
 router.post('/',protect, createCommunity); //tested
-router.post('/:name/join', protect, joinCommunity);
-router.post('/:name/leave', protect, leaveCommunity);
+router.post('/:name/join', protect, joinCommunity);//tested
+router.post('/:name/leave', protect, leaveCommunity);//tested
 
 // Flair management — moderator-only (enforced in the controller)
-router.post('/:name/flairs',               protect, createFlairValidation, createFlair);
-router.patch('/:name/flairs/:flairId',     protect, updateFlairValidation, updateFlair);
-router.delete('/:name/flairs/:flairId',    protect, deleteFlair);
+router.post('/:name/flairs',               protect, createFlairValidation, createFlair);//tested
+router.patch('/:name/flairs/:flairId',     protect, updateFlairValidation, updateFlair);//tested
+router.delete('/:name/flairs/:flairId',    protect, deleteFlair);//tested
 
 module.exports = router;
 

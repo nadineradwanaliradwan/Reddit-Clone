@@ -130,8 +130,8 @@ router.delete('/:id/save', protect, unsavePost);
 router.get('/:id', optionalProtect, getPost);
 
 // ── Author-only mutations ──────────────────────────────────────────────────
-router.post('/',        protect, createPostValidation, createPost);
-router.patch('/:id',    protect, updatePostValidation, updatePost);
-router.delete('/:id',   protect, deletePost);
+router.post('/',        protect, createPostValidation, createPost);//tested
+router.patch('/:id',    protect, updatePostValidation, updatePost);//tested
+router.delete('/:id',   protect, deletePost);//tested
 
 module.exports = router;
