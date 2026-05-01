@@ -111,6 +111,32 @@ const postSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ── AI-generated summary (cached) ───────────────────────────────────────
+    // Cached output from POST /reddit/posts/:id/summarize. Null until the first
+    // summarize call writes them.
+    summary: {
+      type: String,
+      default: null,
+      maxlength: 2000, // hard ceiling so a runaway model can't bloat the doc
+    },
+
+    // When the cached summary was generated. Surfaced to clients so they can
+    // show "summarized 2 days ago" if they want.
+    summaryGeneratedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Hash of the post content at the time the summary was generated.
+    // On every summarize call we re-hash the current content; if it differs
+    // from this stored hash, the summary is stale and we regenerate.
+    // More precise than comparing against `updatedAt`, because edits to
+    // unrelated fields (e.g. flair) shouldn't invalidate a perfectly good summary.
+    summaryContentHash: {
+      type: String,
+      default: null,
+    },
+
     // Soft delete — keeps the document so comments / references stay valid
     isDeleted: {
       type: Boolean,

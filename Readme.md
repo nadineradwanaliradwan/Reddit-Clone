@@ -58,6 +58,7 @@ Communities can have at most 100 flairs. Deleting a flair also clears `flair: nu
 | DELETE | `/:id` | Soft-delete a post | Author only |
 | POST | `/:id/save` | Save a post to the user's saved feed (idempotent) | Required |
 | DELETE | `/:id/save` | Remove a post from the user's saved feed (idempotent) | Required |
+| POST | `/:id/summarize` | AI-generated 2-3 sentence summary of the post (cached) | Required (rate-limited 10/hour) |
 
 **Post types & required fields**
 - `text` — `title`, `body` (max 40,000 chars)
@@ -94,6 +95,23 @@ The same query params from the community feed are accepted (`page`, `limit`, `so
 **Save / unsave — `POST` and `DELETE /:id/save`**
 
 Both endpoints are **idempotent**: re-saving an already-saved post returns `200` with `alreadySaved: true`, and unsaving a non-saved post returns `200` with `alreadyUnsaved: true`. A unique compound index on `(user, post)` prevents duplicate save records at the database level.
+
+**AI summarization — `POST /:id/summarize`**
+
+Generates (or returns the cached) 2-3 sentence summary of a post via Google Gemini (free tier). Results are cached on the post document, keyed by a SHA-256 hash of the prompt-relevant fields (`type + title + body/url/imageUrl`); the next request returns the cached summary instantly without burning API quota. Editing the post body/title/url/imageUrl invalidates the hash and triggers a regenerate on the next call. Editing unrelated fields (e.g. flair) does not invalidate the cache.
+
+Per-user rate limit: **10 requests per hour**, applied even on cache hits (gates abuse independently of API consumption). Standard `RateLimit-*` response headers are included so clients can self-throttle.
+
+Response:
+```json
+{ "success": true, "summary": "...", "generatedAt": "...", "cached": true|false }
+```
+
+Error mapping:
+- `503` — `GEMINI_API_KEY` is not configured on the server
+- `502` — Gemini API returned an error
+- `504` — Gemini request timed out (>15s)
+- `429` — rate limit exceeded
 
 ---
 
@@ -149,6 +167,7 @@ Fill in the values in `.env`:
 | `EMAIL_FROM_NAME` | Sender display name (e.g. `Reddit Clone`) |
 | `EMAIL_FROM_ADDRESS` | Sender email — use `onboarding@resend.dev` for testing |
 | `CLIENT_URL` | Frontend origin (e.g. `http://localhost:5173`) |
+| `GEMINI_API_KEY` | Google AI Studio API key (free tier). Get one at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey). Optional — if omitted, only `/posts/:id/summarize` returns 503 and the rest of the API works normally. |
 
 Generate JWT secrets:
 ```bash
@@ -201,9 +220,11 @@ Reddit-Clone/
     │   ├── adminRoute.js
     │   ├── communityRoute.js
     │   └── postRoute.js
-    └── Middlewares/
-        ├── authMiddleware.js        # protect (JWT verify) + restrictTo (RBAC)
-        └── optionalProtect.js      # Like protect but never blocks — sets req.user or null
+    ├── Middlewares/
+    │   ├── authMiddleware.js        # protect (JWT verify) + restrictTo (RBAC)
+    │   └── optionalProtect.js      # Like protect but never blocks — sets req.user or null
+    └── Services/
+        └── aiService.js            # Google Gemini wrapper for post summarization
 ```
 
 ---

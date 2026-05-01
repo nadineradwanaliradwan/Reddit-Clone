@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const Post = require('../Models/postModel');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
 const SavedPost = require('../Models/savedPostModel');
+const { summarizePost: aiSummarize } = require('../Services/aiService');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -605,6 +607,109 @@ const unsavePost = async (req, res) => {
   }
 };
 
+// ─── @route  POST /reddit/posts/:id/summarize ────────────────────────────────
+// ─── @access Private ─────────────────────────────────────────────────────────
+//
+// Generates (or returns the cached) AI summary for a post via Google Gemini.
+//
+// Caching: we hash the relevant content fields (type + title + body/url/imageUrl)
+// and store the hash with the summary. On each call we re-hash and compare:
+//   - hash matches → return the cached summary instantly (no API call)
+//   - hash differs → post was edited since last summarize → regenerate
+// More precise than comparing against `updatedAt`, since flair edits etc.
+// shouldn't invalidate a perfectly good summary.
+//
+// Errors are translated to the right HTTP status:
+//   AI_NOT_CONFIGURED → 503 (server is missing GEMINI_API_KEY)
+//   AI_TIMEOUT        → 504 (upstream timed out)
+//   AI_UPSTREAM_ERROR → 502 (upstream returned an error)
+
+// Hashes only the fields the prompt actually uses, so unrelated edits don't bust the cache.
+const hashSummarizableContent = (post) => {
+  const parts = [post.type, post.title, post.body || '', post.url || '', post.imageUrl || ''];
+  return crypto.createHash('sha256').update(parts.join('\n')).digest('hex');
+};
+
+const summarizePost = async (req, res) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id))
+    return res.status(404).json({ success: false, message: 'Post not found' });
+
+  try {
+    const post = await Post.findById(id).populate('community', 'type');
+    if (!post || post.isDeleted)
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    // Don't let users summarize posts they aren't allowed to view in the first place
+    if (!(await canUserViewPostInCommunity(post.community, req.user.id)))
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    const currentHash = hashSummarizableContent(post);
+
+    // Cache hit — return what we have without burning API quota
+    if (post.summary && post.summaryContentHash === currentHash) {
+      return res.status(200).json({
+        success: true,
+        summary: post.summary,
+        generatedAt: post.summaryGeneratedAt,
+        cached: true,
+      });
+    }
+
+    // Cache miss — call the model
+    let summary;
+    try {
+      summary = await aiSummarize(post);
+    } catch (err) {
+      // Temporary diagnostic logging — log full error to server console so we can debug
+      console.error('[summarize] AI service error:', {
+        code: err.code,
+        message: err.message,
+        cause: err.cause ? err.cause.message : undefined,
+      });
+      if (err.code === 'AI_NOT_CONFIGURED')
+        return res.status(503).json({
+          success: false,
+          message: 'AI summarization is not configured on this server',
+        });
+      if (err.code === 'AI_TIMEOUT')
+        return res.status(504).json({
+          success: false,
+          message: 'AI service timed out — try again in a moment',
+        });
+      if (err.code === 'AI_UPSTREAM_ERROR')
+        return res.status(502).json({
+          success: false,
+          message: 'AI service is unavailable — try again in a moment',
+        });
+      throw err;
+    }
+
+    // Persist the new summary atomically — using $set keeps it from triggering
+    // unrelated validators (e.g. URL re-validation on a link post).
+    const now = new Date();
+    await Post.updateOne(
+      { _id: post._id },
+      {
+        $set: {
+          summary,
+          summaryGeneratedAt: now,
+          summaryContentHash: currentHash,
+        },
+      },
+    );
+
+    res.status(200).json({
+      success: true,
+      summary,
+      generatedAt: now,
+      cached: false,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
 module.exports = {
   createPost,
   getPost,
@@ -614,4 +719,7 @@ module.exports = {
   listFeed,
   savePost,
   unsavePost,
+  summarizePost,
 };
+
+ 

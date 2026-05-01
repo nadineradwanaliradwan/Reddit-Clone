@@ -1,5 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const { protect } = require('../Middlewares/authMiddleware');
 const { optionalProtect } = require('../Middlewares/optionalProtect');
 const Post = require('../Models/postModel');
@@ -12,7 +13,21 @@ const {
   listFeed,
   savePost,
   unsavePost,
+  summarizePost,
 } = require('../Controllers/postController');
+
+// Per-user rate limit on summarization — protects the free-tier Gemini quota.
+// Keyed strictly by user id, since `protect` runs before this and guarantees req.user.
+// We disable the IPv6-fallback validator because we never fall back to IP here.
+const summarizeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,                  // 10 summaries per user per hour
+  keyGenerator: (req) => String(req.user.id),
+  validate: { keyGeneratorIpFallback: false },
+  standardHeaders: true,    // adds RateLimit-* headers so clients can self-throttle
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many summarization requests, please try again later' },
+});
 
 const router = express.Router();
 
@@ -123,8 +138,14 @@ router.get('/community/:name', optionalProtect, listPostsByCommunity);
 
 // ── Save / unsave ──────────────────────────────────────────────────────────
 // Sub-paths of `/:id`, so they MUST come before the bare `/:id` routes below.
-router.post('/:id/save',   protect, savePost);
-router.delete('/:id/save', protect, unsavePost);
+router.post('/:id/save',      protect, savePost);
+router.delete('/:id/save',    protect, unsavePost);
+
+// ── AI summarization ────────────────────────────────────────────────────────
+// Any authenticated user can request a summary. Result is cached on the post
+// and reused on subsequent calls until the post content changes (auto-detected
+// via content hash). Per-user rate limit (10/hour) protects the free quota.
+router.post('/:id/summarize', protect, summarizeLimiter, summarizePost);
 
 // ── Single post ────────────────────────────────────────────────────────────
 router.get('/:id', optionalProtect, getPost);
