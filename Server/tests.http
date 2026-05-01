@@ -1,0 +1,514 @@
+### ─── Reddit Clone — Manual Test Scenarios ─────────────────────────────────
+# Install the "REST Client" extension in VS Code, then click "Send Request" above each block.
+# Or copy any request into Postman / Insomnia / curl.
+#
+# The ### separator is required between requests.
+# Variables are set from earlier responses — run the file top-to-bottom.
+
+@baseUrl = http://localhost:5000
+@modEmail = mod@example.com
+@modPassword = Password123!
+@memberEmail = member@example.com
+@memberPassword = Password123!
+
+
+### 0. Health check
+GET {{baseUrl}}/
+
+
+### ─── SCENARIO A: REGISTER + LOGIN AS MODERATOR ──────────────────────────────
+
+### A1. Register the moderator (skip if already registered — will 409)
+POST {{baseUrl}}/reddit/auth/register
+Content-Type: application/json
+
+{
+  "username": "moduser",
+  "email": "{{modEmail}}",
+  "password": "{{modPassword}}"
+}
+
+
+### A2. Log in as moderator → copy the accessToken from the response
+# @name modLogin
+POST {{baseUrl}}/reddit/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{modEmail}}",
+  "password": "{{modPassword}}"
+}
+
+###
+# Save the token from A2's response into this variable.
+# (REST Client auto-captures it via {{modLogin.response.body.accessToken}} on supported versions,
+# but pasting is the safest/easiest way.)
+@modToken = PASTE_ACCESS_TOKEN_FROM_A2_HERE
+
+### ─── SCENARIO B: REGISTER + LOGIN AS A REGULAR MEMBER ───────────────────────
+
+### B1. Register the member
+POST {{baseUrl}}/reddit/auth/register
+Content-Type: application/json
+
+{
+  "username": "memberuser",
+  "email": "{{memberEmail}}",
+  "password": "{{memberPassword}}"
+}
+
+
+### B2. Log in as member
+# @name memberLogin
+POST {{baseUrl}}/reddit/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{memberEmail}}",
+  "password": "{{memberPassword}}"
+}
+
+###
+@memberToken = PASTE_ACCESS_TOKEN_FROM_B2_HERE
+
+
+### ─── SCENARIO C: CREATE A COMMUNITY (moderator becomes creator+mod) ─────────
+
+### C1. Create r/cooking
+POST {{baseUrl}}/reddit/communities
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{
+  "name": "cooking",
+  "description": "recipes, tips, and kitchen disasters",
+  "type": "public",
+  "allowedPostTypes": "any"
+}
+
+
+### C2. Confirm creation
+GET {{baseUrl}}/reddit/communities/cooking
+
+
+### C3. Have the member join
+POST {{baseUrl}}/reddit/communities/cooking/join
+Authorization: Bearer {{memberToken}}
+
+
+### ─── SCENARIO D: FLAIR MANAGEMENT (the new endpoints) ───────────────────────
+
+### D1. ✓ Moderator creates "Recipe" flair with orange background
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{
+  "name": "Recipe",
+  "textColor": "#ffffff",
+  "backgroundColor": "#ff4500"
+}
+###
+@recipeFlairId = PASTE_flair._id_FROM_D1_HERE
+
+
+### D2. ✓ Moderator creates "Question" flair (default colors)
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{
+  "name": "Question"
+}
+###
+@questionFlairId = PASTE_flair._id_FROM_D2_HERE
+
+
+### D3. ✗ Duplicate name → 409
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{ "name": "recipe" }
+
+
+### D4. ✗ Regular member tries to create a flair → 403
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{ "name": "Equipment" }
+
+
+### D5. ✗ Invalid hex color → 400
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{ "name": "Bad", "backgroundColor": "not-a-color" }
+
+
+### D6. ✗ Missing name → 400 (from express-validator)
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{ "backgroundColor": "#00ff00" }
+
+
+### D7. ✓ Recolor "Question" flair
+PATCH {{baseUrl}}/reddit/communities/cooking/flairs/{{questionFlairId}}
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{ "backgroundColor": "#336699" }
+
+
+### D8. Confirm update by fetching the community
+GET {{baseUrl}}/reddit/communities/cooking
+
+
+### ─── SCENARIO E: ATTACHING FLAIRS TO POSTS ──────────────────────────────────
+
+### E1. ✓ Member creates a text post with the "Question" flair
+POST {{baseUrl}}/reddit/posts
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "community": "cooking",
+  "type": "text",
+  "title": "Why does my bread not rise?",
+  "body": "Tried proofing at room temp for 2h — still flat. Yeast is new.",
+  "flair": "{{questionFlairId}}"
+}
+###
+@postWithFlairId = PASTE_post._id_FROM_E1_HERE
+
+
+### E2. ✓ Member creates a text post WITHOUT a flair
+POST {{baseUrl}}/reddit/posts
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "community": "cooking",
+  "type": "text",
+  "title": "Unflaired post",
+  "body": "Just chatting."
+}
+
+
+### E3. ✓ Member creates a link post with "Recipe" flair
+POST {{baseUrl}}/reddit/posts
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "community": "cooking",
+  "type": "link",
+  "title": "Best chili recipe I've made",
+  "url": "https://example.com/chili-recipe",
+  "flair": "{{recipeFlairId}}"
+}
+
+
+### E4. ✗ Bad flair id → 400
+POST {{baseUrl}}/reddit/posts
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "community": "cooking",
+  "type": "text",
+  "title": "With a bogus flair",
+  "body": "...",
+  "flair": "507f1f77bcf86cd799439011"
+}
+
+
+### E5. ✓ Change the flair on an existing post (clear it with null)
+PATCH {{baseUrl}}/reddit/posts/{{postWithFlairId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{ "flair": null }
+
+
+### E6. ✓ Set it back to "Question"
+PATCH {{baseUrl}}/reddit/posts/{{postWithFlairId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{ "flair": "{{questionFlairId}}" }
+
+
+### ─── SCENARIO F: FILTERING THE COMMUNITY FEED ───────────────────────────────
+
+### F1. All posts, newest first
+GET {{baseUrl}}/reddit/posts/community/cooking
+
+
+### F2. ✓ Only text posts
+GET {{baseUrl}}/reddit/posts/community/cooking?type=text
+
+
+### F3. ✓ Only link posts
+GET {{baseUrl}}/reddit/posts/community/cooking?type=link
+
+
+### F4. ✗ Invalid type → 400
+GET {{baseUrl}}/reddit/posts/community/cooking?type=bogus
+
+
+### F5. ✓ Only posts with "Recipe" flair
+GET {{baseUrl}}/reddit/posts/community/cooking?flair={{recipeFlairId}}
+
+
+### F6. ✓ Only UNFLAIRED posts
+GET {{baseUrl}}/reddit/posts/community/cooking?flair=none
+
+
+### F7. ✗ Flair id not in this community → 400
+GET {{baseUrl}}/reddit/posts/community/cooking?flair=507f1f77bcf86cd799439011
+
+
+### F8. ✓ Posts from the last day
+GET {{baseUrl}}/reddit/posts/community/cooking?t=day
+
+
+### F9. ✓ Posts from the last week
+GET {{baseUrl}}/reddit/posts/community/cooking?t=week
+
+
+### F10. ✗ Invalid time window → 400
+GET {{baseUrl}}/reddit/posts/community/cooking?t=decade
+
+
+### F11. ✓ Combined: text + recipe + last month, oldest first, 5 per page
+GET {{baseUrl}}/reddit/posts/community/cooking?type=link&flair={{recipeFlairId}}&t=month&sort=old&limit=5&page=1
+
+
+### ─── SCENARIO G: DELETE A FLAIR (posts using it should become unflaired) ────
+
+### G1. Confirm posts currently use "Question" flair
+GET {{baseUrl}}/reddit/posts/community/cooking?flair={{questionFlairId}}
+
+
+### G2. ✗ Member can't delete a flair → 403
+DELETE {{baseUrl}}/reddit/communities/cooking/flairs/{{questionFlairId}}
+Authorization: Bearer {{memberToken}}
+
+
+### G3. ✓ Moderator deletes the "Question" flair
+DELETE {{baseUrl}}/reddit/communities/cooking/flairs/{{questionFlairId}}
+Authorization: Bearer {{modToken}}
+
+
+### G4. ✓ Posts previously flaired "Question" are now unflaired — this returns them
+GET {{baseUrl}}/reddit/posts/community/cooking?flair=none
+
+
+### G5. ✓ The "Question" flair is gone from the community
+GET {{baseUrl}}/reddit/communities/cooking
+
+
+### G6. ✗ Filtering by the now-deleted flair → 400
+GET {{baseUrl}}/reddit/posts/community/cooking?flair={{questionFlairId}}
+
+
+### ─── SCENARIO H: EDGE CASES ─────────────────────────────────────────────────
+
+### H1. ✗ Unauthenticated user tries to create flair → 401
+POST {{baseUrl}}/reddit/communities/cooking/flairs
+Content-Type: application/json
+
+{ "name": "NoAuth" }
+
+
+### H2. ✗ Flair on non-existent community → 404
+POST {{baseUrl}}/reddit/communities/doesnotexist/flairs
+Authorization: Bearer {{modToken}}
+Content-Type: application/json
+
+{ "name": "Ghost" }
+
+
+### H3. ✗ Delete flair with a malformed id → 404
+DELETE {{baseUrl}}/reddit/communities/cooking/flairs/not-a-valid-id
+Authorization: Bearer {{modToken}}
+
+
+### H4. ✗ Delete a flair id that doesn't exist → 404
+DELETE {{baseUrl}}/reddit/communities/cooking/flairs/507f1f77bcf86cd799439011
+Authorization: Bearer {{modToken}}
+
+
+### ─── SCENARIO I: FEED PAGE (home / popular / saved) ─────────────────────────
+
+### I1. ✓ Popular feed — anonymous
+GET {{baseUrl}}/reddit/posts/feed
+
+
+### I2. ✓ Popular feed — explicit scope
+GET {{baseUrl}}/reddit/posts/feed?scope=popular
+
+
+### I3. ✓ Home feed — member sees posts in r/cooking (which they joined in C3)
+GET {{baseUrl}}/reddit/posts/feed?scope=home
+Authorization: Bearer {{memberToken}}
+
+
+### I4. ✗ Home feed without auth → 401
+GET {{baseUrl}}/reddit/posts/feed?scope=home
+
+
+### I5. ✓ Popular feed, only text posts, last week, 5 per page
+GET {{baseUrl}}/reddit/posts/feed?scope=popular&type=text&t=week&limit=5
+
+
+### I6. ✓ Popular feed, only unflaired posts, oldest first
+GET {{baseUrl}}/reddit/posts/feed?scope=popular&flair=none&sort=old
+
+
+### I7. ✗ Invalid scope → falls back to popular (acceptable) OR returns popular results
+# (Controller treats unknown scope as 'popular' — should still return 200)
+GET {{baseUrl}}/reddit/posts/feed?scope=bogus
+
+
+### I8. ✗ Invalid type → 400
+GET {{baseUrl}}/reddit/posts/feed?type=bogus
+
+
+### I9. ✗ Invalid time window → 400
+GET {{baseUrl}}/reddit/posts/feed?t=decade
+
+
+### I10. ✗ Invalid flair id → 400
+GET {{baseUrl}}/reddit/posts/feed?flair=not-an-id
+
+
+### ─── SCENARIO J: SAVE / UNSAVE POSTS ────────────────────────────────────────
+
+### J1. ✓ Member saves a post (use the post id from E1)
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/save
+Authorization: Bearer {{memberToken}}
+
+
+### J2. ✓ Idempotent — saving again returns alreadySaved: true
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/save
+Authorization: Bearer {{memberToken}}
+
+
+### J3. ✗ Unauthenticated save → 401
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/save
+
+
+### J4. ✗ Save a post that doesn't exist → 404
+POST {{baseUrl}}/reddit/posts/507f1f77bcf86cd799439011/save
+Authorization: Bearer {{memberToken}}
+
+
+### J5. ✗ Save with malformed id → 404
+POST {{baseUrl}}/reddit/posts/not-a-valid-id/save
+Authorization: Bearer {{memberToken}}
+
+
+### J6. ✓ Saved feed now contains the saved post
+GET {{baseUrl}}/reddit/posts/feed?scope=saved
+Authorization: Bearer {{memberToken}}
+
+
+### J7. ✗ Saved feed without auth → 401
+GET {{baseUrl}}/reddit/posts/feed?scope=saved
+
+
+### J8. ✓ Saved feed with type filter — only text posts
+GET {{baseUrl}}/reddit/posts/feed?scope=saved&type=text
+Authorization: Bearer {{memberToken}}
+
+
+### J9. ✓ Member unsaves the post
+DELETE {{baseUrl}}/reddit/posts/{{postWithFlairId}}/save
+Authorization: Bearer {{memberToken}}
+
+
+### J10. ✓ Idempotent — unsaving again returns alreadyUnsaved: true
+DELETE {{baseUrl}}/reddit/posts/{{postWithFlairId}}/save
+Authorization: Bearer {{memberToken}}
+
+
+### J11. ✓ Saved feed is now empty
+GET {{baseUrl}}/reddit/posts/feed?scope=saved
+Authorization: Bearer {{memberToken}}
+
+
+### ─── SCENARIO K: AI POST SUMMARIZATION ──────────────────────────────────────
+
+### K1. ✓ Member summarizes the text post (first call → cached: false)
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K2. ✓ Same request again → returns the cached summary (cached: true, instant)
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K3. ✗ Unauthenticated summarize → 401
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+
+
+### K4. ✗ Summarize a post that doesn't exist → 404
+POST {{baseUrl}}/reddit/posts/507f1f77bcf86cd799439011/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K5. ✗ Summarize with malformed id → 404
+POST {{baseUrl}}/reddit/posts/not-a-valid-id/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K6. ✓ Edit the post body (this should invalidate the cached summary)
+PATCH {{baseUrl}}/reddit/posts/{{postWithFlairId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{ "body": "Tried proofing at room temp for 2h — still flat. Yeast is fresh from yesterday. Could it be the oven temp? I preheated to 200C." }
+
+
+### K7. ✓ Summarize again — cache should miss because content hash changed (cached: false again)
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K8. ✓ Editing only the flair should NOT invalidate the cache (cached: true)
+PATCH {{baseUrl}}/reddit/posts/{{postWithFlairId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{ "flair": null }
+
+###
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K9. ✓ Summarize a LINK post (created in E3 — uses recipeFlairId)
+# First, fetch all posts in the community to grab a link post id, then paste below.
+GET {{baseUrl}}/reddit/posts/community/cooking?type=link
+
+###
+@linkPostId = PASTE_link_post._id_FROM_K9_ABOVE_HERE
+
+POST {{baseUrl}}/reddit/posts/{{linkPostId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+
+### K10. ⚠ Rate limit — fire 11 quick summarize calls; the 11th should return 429
+# (Run K1 ten more times in quick succession after this comment block;
+#  the 11th hit within an hour returns "Too many summarization requests".)
+POST {{baseUrl}}/reddit/posts/{{postWithFlairId}}/summarize
+Authorization: Bearer {{memberToken}}
+
+Authorization: Bearer {{m

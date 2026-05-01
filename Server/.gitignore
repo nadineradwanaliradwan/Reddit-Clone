@@ -11,7 +11,5 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Personal scratch / manual testing files
-tests.http
-*.http
+# Personal scratch files
 _*.js
