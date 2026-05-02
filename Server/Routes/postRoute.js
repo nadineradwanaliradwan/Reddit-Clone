@@ -11,6 +11,8 @@ const {
   updatePost,
   deletePost,
   listFeed,
+  upvotePost,
+  downvotePost,
   savePost,
   unsavePost,
   summarizePost,
@@ -138,6 +140,8 @@ router.get('/community/:name', optionalProtect, listPostsByCommunity);
 
 // ── Save / unsave ──────────────────────────────────────────────────────────
 // Sub-paths of `/:id`, so they MUST come before the bare `/:id` routes below.
+router.post('/:id/upvote',   protect, upvotePost);
+router.post('/:id/downvote', protect, downvotePost);
 router.post('/:id/save',      protect, savePost);
 router.delete('/:id/save',    protect, unsavePost);
 

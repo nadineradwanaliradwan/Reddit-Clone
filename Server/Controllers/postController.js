@@ -5,6 +5,7 @@ const Post = require('../Models/postModel');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
 const SavedPost = require('../Models/savedPostModel');
+const PostVote = require('../Models/postVoteModel');
 const { summarizePost: aiSummarize } = require('../Services/aiService');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -68,6 +69,34 @@ const isFlairValidForCommunity = (community, flairId) => {
   return community.flairs.some(f => f._id.equals(flairId));
 };
 
+const toPostResponse = (post, userVote = 0) => {
+  const obj = typeof post.toJSON === 'function' ? post.toJSON() : { ...post };
+  obj.upvotes = obj.upvotes || 0;
+  obj.downvotes = obj.downvotes || 0;
+  obj.score = obj.score || 0;
+  obj.userVote = userVote;
+  return obj;
+};
+
+const attachUserVotes = async (posts, userId) => {
+  if (!posts.length) return [];
+  if (!userId) return posts.map(post => toPostResponse(post, 0));
+
+  const votes = await PostVote.find({
+    user: userId,
+    post: { $in: posts.map(post => post._id) },
+  }).select('post value');
+
+  const voteByPostId = new Map(votes.map(vote => [String(vote.post), vote.value]));
+  return posts.map(post => toPostResponse(post, voteByPostId.get(String(post._id)) || 0));
+};
+
+const getUserVoteForPost = async (postId, userId) => {
+  if (!userId) return 0;
+  const vote = await PostVote.findOne({ user: userId, post: postId }).select('value');
+  return vote ? vote.value : 0;
+};
+
 // ─── @route  POST /reddit/posts ──────────────────────────────────────────────
 // ─── @access Private ─────────────────────────────────────────────────────────
 const createPost = async (req, res) => {
@@ -122,7 +151,7 @@ const createPost = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Post created successfully',
-      post: populated,
+      post: toPostResponse(populated, 0),
     });
   } catch (err) {
     if (err.name === 'ValidationError') {
@@ -157,7 +186,8 @@ const getPost = async (req, res) => {
 
     // Soft-deleted posts still respond 200 with a redacted body (toJSON handles the redaction).
     // This mirrors Reddit: a deleted post's URL still works but the content is gone.
-    res.status(200).json({ success: true, post });
+    const userVote = await getUserVoteForPost(post._id, userId);
+    res.status(200).json({ success: true, post: toPostResponse(post, userVote) });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
@@ -248,6 +278,8 @@ const listPostsByCommunity = async (req, res) => {
       userId ? Membership.findOne({ user: userId, community: community._id }) : Promise.resolve(null),
     ]);
 
+    const postsWithVotes = await attachUserVotes(posts, userId);
+
     res.status(200).json({
       success: true,
       community: {
@@ -273,7 +305,7 @@ const listPostsByCommunity = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      posts,
+      posts: postsWithVotes,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
@@ -336,7 +368,7 @@ const updatePost = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Post updated successfully',
-      post: populated,
+      post: toPostResponse(populated, await getUserVoteForPost(post._id, req.user.id)),
     });
   } catch (err) {
     if (err.name === 'ValidationError') {
@@ -372,6 +404,81 @@ const deletePost = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
+
+// ─── @route  POST /reddit/posts/:id/upvote|downvote ─────────────────────────
+// ─── @access Private ─────────────────────────────────────────────────────────
+const votePost = async (req, res, nextValue) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id))
+    return res.status(404).json({ success: false, message: 'Post not found' });
+
+  try {
+    const post = await Post.findById(id).populate('community', 'type');
+    if (!post || post.isDeleted)
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    if (!(await canUserViewPostInCommunity(post.community, req.user.id)))
+      return res.status(404).json({ success: false, message: 'Post not found' });
+
+    const existingVote = await PostVote.findOne({ user: req.user.id, post: post._id });
+
+    let upvoteDelta = 0;
+    let downvoteDelta = 0;
+    let userVote = nextValue;
+    let message = nextValue === 1 ? 'Post upvoted' : 'Post downvoted';
+
+    if (!existingVote) {
+      await PostVote.create({ user: req.user.id, post: post._id, value: nextValue });
+      if (nextValue === 1) upvoteDelta = 1;
+      else downvoteDelta = 1;
+    } else if (existingVote.value === nextValue) {
+      await existingVote.deleteOne();
+      if (nextValue === 1) upvoteDelta = -1;
+      else downvoteDelta = -1;
+      userVote = 0;
+      message = 'Vote removed';
+    } else {
+      const previousValue = existingVote.value;
+      existingVote.value = nextValue;
+      await existingVote.save();
+
+      if (previousValue === 1) {
+        upvoteDelta = -1;
+        downvoteDelta = 1;
+      } else {
+        upvoteDelta = 1;
+        downvoteDelta = -1;
+      }
+      message = nextValue === 1 ? 'Changed vote to upvote' : 'Changed vote to downvote';
+    }
+
+    const updatedPost = await Post.findByIdAndUpdate(
+      post._id,
+      {
+        $inc: {
+          upvotes: upvoteDelta,
+          downvotes: downvoteDelta,
+          score: upvoteDelta - downvoteDelta,
+        },
+      },
+      { returnDocument: 'after' },
+    ).select('upvotes downvotes score');
+
+    res.status(200).json({
+      success: true,
+      message,
+      upvotes: updatedPost.upvotes,
+      downvotes: updatedPost.downvotes,
+      score: updatedPost.score,
+      userVote,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+const upvotePost = (req, res) => votePost(req, res, 1);
+const downvotePost = (req, res) => votePost(req, res, -1);
 
 // ─── @route  GET /reddit/posts/feed ──────────────────────────────────────────
 // ─── @access Public for `popular`, Private for `home` and `saved` ────────────
@@ -519,6 +626,8 @@ const listFeed = async (req, res) => {
         .populate('community', 'name type');
     }
 
+    const postsWithVotes = await attachUserVotes(posts, userId);
+
     res.status(200).json({
       success: true,
       scope,
@@ -530,7 +639,7 @@ const listFeed = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      posts,
+      posts: postsWithVotes,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
@@ -717,6 +826,8 @@ module.exports = {
   updatePost,
   deletePost,
   listFeed,
+  upvotePost,
+  downvotePost,
   savePost,
   unsavePost,
   summarizePost,

@@ -111,6 +111,24 @@ const postSchema = new mongoose.Schema(
       index: true,
     },
 
+    upvotes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    downvotes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    score: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+
     // ── AI-generated summary (cached) ───────────────────────────────────────
     // Cached output from POST /reddit/posts/:id/summarize. Null until the first
     // summarize call writes them.

@@ -1,0 +1,1206 @@
+{
+  "info": {
+    "_postman_id": "5d8d8e15-7d77-4b48-9f10-9f2c2ab3d7f1",
+    "name": "Reddit Clone API - Full Backend Collection",
+    "description": "Full runnable Postman collection for every mounted Reddit Clone backend endpoint. Run the first setup request before running the rest of the collection. Auth forgot/reset password controller methods exist in code, but their routes are currently commented out, so they are intentionally not included as runnable endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('baseUrl')) pm.collectionVariables.set('baseUrl', 'http://localhost:5000');",
+          "if (!pm.collectionVariables.get('password')) pm.collectionVariables.set('password', 'Password123!');",
+          "if (!pm.collectionVariables.get('newPassword')) pm.collectionVariables.set('newPassword', 'Password456!');",
+          "if (!pm.collectionVariables.get('adminEmail')) pm.collectionVariables.set('adminEmail', 'admin@example.com');",
+          "if (!pm.collectionVariables.get('adminPassword')) pm.collectionVariables.set('adminPassword', 'Password123!');",
+          "if (!pm.collectionVariables.get('runSuffix')) {",
+          "  const suffix = Date.now().toString().slice(-10);",
+          "  pm.collectionVariables.set('runSuffix', suffix);",
+          "  pm.collectionVariables.set('modUsername', `mod_${suffix}`);",
+          "  pm.collectionVariables.set('memberUsername', `member_${suffix}`);",
+          "  pm.collectionVariables.set('outsiderUsername', `outsider_${suffix}`);",
+          "  pm.collectionVariables.set('memberUpdatedUsername', `member2_${suffix}`);",
+          "  pm.collectionVariables.set('modEmail', `mod_${suffix}@example.com`);",
+          "  pm.collectionVariables.set('memberEmail', `member_${suffix}@example.com`);",
+          "  pm.collectionVariables.set('outsiderEmail', `outsider_${suffix}@example.com`);",
+          "  pm.collectionVariables.set('memberUpdatedEmail', `member2_${suffix}@example.com`);",
+          "  pm.collectionVariables.set('publicCommunityName', `cook${suffix}`);",
+          "  pm.collectionVariables.set('privateCommunityName', `priv${suffix}`);",
+          "  pm.collectionVariables.set('recipeFlairName', `Recipe ${suffix}`);",
+          "  pm.collectionVariables.set('questionFlairName', `Question ${suffix}`);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
+    { "key": "password", "value": "Password123!", "type": "string" },
+    { "key": "newPassword", "value": "Password456!", "type": "string" },
+    { "key": "adminEmail", "value": "admin@example.com", "type": "string" },
+    { "key": "adminPassword", "value": "Password123!", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "runSuffix", "value": "", "type": "string" },
+    { "key": "modUsername", "value": "", "type": "string" },
+    { "key": "memberUsername", "value": "", "type": "string" },
+    { "key": "outsiderUsername", "value": "", "type": "string" },
+    { "key": "memberUpdatedUsername", "value": "", "type": "string" },
+    { "key": "modEmail", "value": "", "type": "string" },
+    { "key": "memberEmail", "value": "", "type": "string" },
+    { "key": "outsiderEmail", "value": "", "type": "string" },
+    { "key": "memberUpdatedEmail", "value": "", "type": "string" },
+    { "key": "modToken", "value": "", "type": "string" },
+    { "key": "memberToken", "value": "", "type": "string" },
+    { "key": "outsiderToken", "value": "", "type": "string" },
+    { "key": "modRefreshToken", "value": "", "type": "string" },
+    { "key": "publicCommunityName", "value": "", "type": "string" },
+    { "key": "privateCommunityName", "value": "", "type": "string" },
+    { "key": "recipeFlairName", "value": "", "type": "string" },
+    { "key": "questionFlairName", "value": "", "type": "string" },
+    { "key": "recipeFlairId", "value": "", "type": "string" },
+    { "key": "questionFlairId", "value": "", "type": "string" },
+    { "key": "textPostId", "value": "", "type": "string" },
+    { "key": "linkPostId", "value": "", "type": "string" },
+    { "key": "imagePostId", "value": "", "type": "string" },
+    { "key": "commentId", "value": "", "type": "string" },
+    { "key": "replyCommentId", "value": "", "type": "string" },
+    { "key": "notificationId", "value": "", "type": "string" },
+    { "key": "memberUserId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "item": [
+        {
+          "name": "Reset Generated Test Variables + Health Check",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString().slice(-10);",
+                  "const generated = {",
+                  "  runSuffix: suffix,",
+                  "  modUsername: `mod_${suffix}`,",
+                  "  memberUsername: `member_${suffix}`,",
+                  "  outsiderUsername: `outsider_${suffix}`,",
+                  "  memberUpdatedUsername: `member2_${suffix}`,",
+                  "  modEmail: `mod_${suffix}@example.com`,",
+                  "  memberEmail: `member_${suffix}@example.com`,",
+                  "  outsiderEmail: `outsider_${suffix}@example.com`,",
+                  "  memberUpdatedEmail: `member2_${suffix}@example.com`,",
+                  "  publicCommunityName: `cook${suffix}`,",
+                  "  privateCommunityName: `priv${suffix}`,",
+                  "  recipeFlairName: `Recipe ${suffix}`,",
+                  "  questionFlairName: `Question ${suffix}`",
+                  "};",
+                  "Object.entries(generated).forEach(([key, value]) => pm.collectionVariables.set(key, value));",
+                  "['modToken','memberToken','outsiderToken','modRefreshToken','recipeFlairId','questionFlairId','textPostId','linkPostId','imagePostId','commentId','replyCommentId','notificationId','memberUserId'].forEach(key => pm.collectionVariables.set(key, ''));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API is running', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "item": [
+        {
+          "name": "Register Moderator User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('moderator user registered', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('modToken', json.accessToken);",
+                  "pm.collectionVariables.set('modRefreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{modUsername}}\",\n  \"email\": \"{{modEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/register"
+          }
+        },
+        {
+          "name": "Register Member User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('member user registered', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('memberToken', json.accessToken);",
+                  "pm.collectionVariables.set('memberUserId', json.user._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{memberUsername}}\",\n  \"email\": \"{{memberEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/register"
+          }
+        },
+        {
+          "name": "Register Outsider User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('outsider user registered', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('outsiderToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{outsiderUsername}}\",\n  \"email\": \"{{outsiderEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/register"
+          }
+        },
+        {
+          "name": "Login Moderator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('moderator login works', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('modToken', json.accessToken);",
+                  "pm.collectionVariables.set('modRefreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{modEmail}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/login"
+          }
+        },
+        {
+          "name": "Refresh Moderator Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('refresh works', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('modToken', json.accessToken);",
+                  "pm.collectionVariables.set('modRefreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{modRefreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/refresh"
+          }
+        },
+        {
+          "name": "Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('current user returned', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Communities + Flairs",
+      "item": [
+        {
+          "name": "Create Public Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('community created', function () { pm.response.to.have.status(201); });"]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{publicCommunityName}}\",\n  \"description\": \"Recipes, tips, and kitchen experiments\",\n  \"sidebar\": \"Welcome to the test cooking community.\",\n  \"type\": \"public\",\n  \"allowedPostTypes\": \"any\",\n  \"isNSFW\": false,\n  \"welcomeMessage\": \"Welcome!\",\n  \"rules\": [\n    { \"title\": \"Be kind\", \"body\": \"Keep discussion useful and respectful.\" }\n  ],\n  \"flairs\": []\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/communities"
+          }
+        },
+        {
+          "name": "Get Public Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('community fetched', function () { pm.response.to.have.status(200); });"] }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}"
+          }
+        },
+        {
+          "name": "Member Joins Public Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('member joined', function () { pm.response.to.have.status(200); });"] }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/join"
+          }
+        },
+        {
+          "name": "Create Private Community",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('private community created', function () { pm.response.to.have.status(201); });"] }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{privateCommunityName}}\",\n  \"description\": \"Private community for visibility testing\",\n  \"type\": \"private\",\n  \"allowedPostTypes\": \"any\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/communities"
+          }
+        },
+        {
+          "name": "Get Private Community As Moderator",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('private community visible to creator/mod', function () { pm.response.to.have.status(200); });"] }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/communities/{{privateCommunityName}}"
+          }
+        },
+        {
+          "name": "Create Recipe Flair",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recipe flair created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('recipeFlairId', pm.response.json().flair._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{recipeFlairName}}\",\n  \"textColor\": \"#ffffff\",\n  \"backgroundColor\": \"#ff4500\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/flairs"
+          }
+        },
+        {
+          "name": "Create Question Flair",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('question flair created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('questionFlairId', pm.response.json().flair._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{questionFlairName}}\",\n  \"textColor\": \"#ffffff\",\n  \"backgroundColor\": \"#336699\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/flairs"
+          }
+        },
+        {
+          "name": "Update Question Flair",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('flair updated', function () { pm.response.to.have.status(200); });"] }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"backgroundColor\": \"#0079d3\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/flairs/{{questionFlairId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Posts + Feeds + Voting + Saves",
+      "item": [
+        {
+          "name": "Create Text Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('text post created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('textPostId', pm.response.json().post._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"community\": \"{{publicCommunityName}}\",\n  \"type\": \"text\",\n  \"title\": \"Why does my bread not rise?\",\n  \"body\": \"Tried proofing at room temp for 2h and it is still flat.\",\n  \"flair\": \"{{questionFlairId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/posts"
+          }
+        },
+        {
+          "name": "Create Link Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('link post created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('linkPostId', pm.response.json().post._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"community\": \"{{publicCommunityName}}\",\n  \"type\": \"link\",\n  \"title\": \"Best chili recipe\",\n  \"url\": \"https://example.com/chili-recipe\",\n  \"flair\": \"{{recipeFlairId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/posts"
+          }
+        },
+        {
+          "name": "Create Image Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('image post created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('imagePostId', pm.response.json().post._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"community\": \"{{publicCommunityName}}\",\n  \"type\": \"image\",\n  \"title\": \"My sourdough crumb\",\n  \"imageUrl\": \"https://example.com/sourdough.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/posts"
+          }
+        },
+        {
+          "name": "List Community Posts",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('community posts listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/community/{{publicCommunityName}}?sort=new&limit=20&page=1"
+          }
+        },
+        {
+          "name": "List Community Posts Filtered",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('filtered community posts listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/community/{{publicCommunityName}}?type=text&flair={{questionFlairId}}&t=day&sort=old&limit=10&page=1"
+          }
+        },
+        {
+          "name": "Get Single Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post fetched', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}"
+          }
+        },
+        {
+          "name": "Update Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post updated', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Why does my bread not rise? Updated\",\n  \"body\": \"The yeast is new and I also checked the water temperature.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}"
+          }
+        },
+        {
+          "name": "Popular Feed",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('popular feed listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/feed?scope=popular&type=text&t=week&limit=10&page=1"
+          }
+        },
+        {
+          "name": "Home Feed",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('home feed listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/feed?scope=home&limit=10&page=1"
+          }
+        },
+        {
+          "name": "Upvote Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post upvoted', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/upvote"
+          }
+        },
+        {
+          "name": "Upvote Again Toggles Off",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('upvote toggled off', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/upvote"
+          }
+        },
+        {
+          "name": "Downvote Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post downvoted', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/downvote"
+          }
+        },
+        {
+          "name": "Switch Downvote To Upvote",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('vote switched', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/upvote"
+          }
+        },
+        {
+          "name": "Save Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post saved', function () { pm.expect([200, 201]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/save"
+          }
+        },
+        {
+          "name": "Save Text Post Again Idempotent",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post save idempotent', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/save"
+          }
+        },
+        {
+          "name": "Saved Feed",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('saved feed listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/feed?scope=saved&limit=10&page=1"
+          }
+        },
+        {
+          "name": "Unsave Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post unsaved', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/save"
+          }
+        },
+        {
+          "name": "Unsave Text Post Again Idempotent",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('post unsave idempotent', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/save"
+          }
+        },
+        {
+          "name": "Summarize Text Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('summarize endpoint responded with expected status', function () {",
+                  "  pm.expect([200, 502, 503, 504]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/summarize"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Comments + Notifications",
+      "item": [
+        {
+          "name": "List Comments For Text Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comments listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/comments"
+          }
+        },
+        {
+          "name": "Create Top-Level Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('comment created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('commentId', pm.response.json().comment._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"I tried this too. @{{modUsername}} any ideas?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/comments"
+          }
+        },
+        {
+          "name": "Reply To Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('reply created', function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set('replyCommentId', pm.response.json().comment._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Check yeast freshness and water temperature first.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/comments/{{commentId}}/reply"
+          }
+        },
+        {
+          "name": "List Comments After Reply",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comments listed after reply', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{textPostId}}/comments"
+          }
+        },
+        {
+          "name": "Update Comment",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment updated', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Edited: I tried this too and checked the yeast.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/comments/{{commentId}}"
+          }
+        },
+        {
+          "name": "Save Reply Comment",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment saved', function () { pm.expect([200, 201]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/{{replyCommentId}}/save"
+          }
+        },
+        {
+          "name": "Save Reply Comment Again Idempotent",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment save idempotent', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/{{replyCommentId}}/save"
+          }
+        },
+        {
+          "name": "List Saved Comments",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('saved comments listed', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/saved?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Unsave Reply Comment",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment unsaved', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/{{replyCommentId}}/save"
+          }
+        },
+        {
+          "name": "Unsave Reply Comment Again Idempotent",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment unsave idempotent', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/{{replyCommentId}}/save"
+          }
+        },
+        {
+          "name": "List Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('notifications listed', function () { pm.response.to.have.status(200); });",
+                  "const notifications = pm.response.json().notifications || [];",
+                  "if (notifications.length > 0) pm.collectionVariables.set('notificationId', notifications[0]._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/notifications?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Get Unread Notification Count",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('unread count returned', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/notifications/unread-count"
+          }
+        },
+        {
+          "name": "Mark Notification As Read",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('notification read route responded', function () { pm.expect([200, 404]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/notifications/{{notificationId}}/read"
+          }
+        },
+        {
+          "name": "Mark All Notifications As Read",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('all notifications marked read', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/notifications/read-all"
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('notification delete route responded', function () { pm.expect([200, 404]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/notifications/{{notificationId}}"
+          }
+        },
+        {
+          "name": "Delete Top-Level Comment",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('comment deleted', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/comments/{{commentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Search",
+      "item": [
+        {
+          "name": "Search Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('user search works', function () { pm.response.to.have.status(200); });",
+                  "pm.test('user search does not expose email', function () {",
+                  "  const user = (pm.response.json().users || [])[0];",
+                  "  if (user) pm.expect(user).to.not.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/search/users?q={{memberUsername}}&page=1&limit=20"
+          }
+        },
+        {
+          "name": "Search Public Communities",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('community search works', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/search/communities?q={{publicCommunityName}}&page=1&limit=20"
+          }
+        },
+        {
+          "name": "Search Private Community As Anonymous Hidden",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('anonymous private search succeeds but hides private community', function () { pm.response.to.have.status(200); });",
+                  "const names = (pm.response.json().communities || []).map(c => c.name);",
+                  "pm.test('private community hidden from anonymous', function () { pm.expect(names).to.not.include(pm.collectionVariables.get('privateCommunityName')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/search/communities?q={{privateCommunityName}}&page=1&limit=20"
+          }
+        },
+        {
+          "name": "Search Private Community As Moderator Visible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('authenticated private search works', function () { pm.response.to.have.status(200); });",
+                  "const names = (pm.response.json().communities || []).map(c => c.name);",
+                  "pm.test('private community visible to member/moderator', function () { pm.expect(names).to.include(pm.collectionVariables.get('privateCommunityName')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/search/communities?q={{privateCommunityName}}&page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 User + Admin + Cleanup",
+      "item": [
+        {
+          "name": "Update Member Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": ["pm.test('member profile updated', function () { pm.response.to.have.status(200); });"] }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{memberUpdatedUsername}}\",\n  \"email\": \"{{memberUpdatedEmail}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/users/me"
+          }
+        },
+        {
+          "name": "Change Member Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('member password changed', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('memberToken', json.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/users/me/password"
+          }
+        },
+        {
+          "name": "Delete Image Post",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('image post deleted', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/posts/{{imagePostId}}"
+          }
+        },
+        {
+          "name": "Delete Question Flair",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('question flair deleted', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/flairs/{{questionFlairId}}"
+          }
+        },
+        {
+          "name": "Member Leaves Public Community",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('member left community', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{memberToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/communities/{{publicCommunityName}}/leave"
+          }
+        },
+        {
+          "name": "Login Existing Admin Account",
+          "description": "This API has no endpoint to create an admin. Set adminEmail/adminPassword to an existing admin account, or set adminToken manually before running admin requests.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin login route responded', function () { pm.expect([200, 401, 403, 423]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200) pm.collectionVariables.set('adminToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/reddit/auth/login"
+          }
+        },
+        {
+          "name": "Admin List Users",
+          "description": "Requires adminToken.",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin list users route responded', function () { pm.expect([200, 401, 403]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/admin/users?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Admin Toggle Member Status",
+          "description": "Requires adminToken. Running this toggles the generated member user active/deactivated.",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin toggle status route responded', function () { pm.expect([200, 401, 403, 404]).to.include(pm.response.code); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/admin/users/{{memberUserId}}/status"
+          }
+        },
+        {
+          "name": "Logout Moderator",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('moderator logged out', function () { pm.response.to.have.status(200); });"] } }
+          ],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{modToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/reddit/auth/logout"
+          }
+        }
+      ]
+    }
+  ]
+}

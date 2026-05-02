@@ -10,15 +10,13 @@ const communityRoutes = require('./Routes/communityRoute');
 const postRoutes = require('./Routes/postRoute');
 const { postScopedRouter, commentRouter } = require('./Routes/commentRoute');
 const notificationRoutes = require('./Routes/notificationRoute');
+const searchRoutes = require('./Routes/searchRoute');
 const { protect } = require('./Middlewares/authMiddleware');
 const dotenv = require('dotenv');
 const path = require('path');
 
 // .env file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-// Connect to MongoDB
-connectDB();
 
 const app = express();
 
@@ -31,6 +29,7 @@ app.use(express.json());
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  skip: () => process.env.NODE_ENV === 'test',
   message: { success: false, message: 'Too many requests, please try again later' },
 });
 
@@ -40,6 +39,7 @@ app.use('/reddit/auth', authLimiter, authRoutes);
 app.use('/reddit/users', protect, userRoutes);
 app.use('/reddit/admin', adminRoutes);
 app.use('/reddit/communities', communityRoutes);
+app.use('/reddit/search', searchRoutes);
 app.use('/reddit/posts', postRoutes);
 app.use('/reddit/posts/:postId/comments', postScopedRouter);
 app.use('/reddit/comments', commentRouter);
@@ -55,5 +55,12 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'test') {
+  // Connect to MongoDB
+  connectDB();
+
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+}
+
+module.exports = app;
