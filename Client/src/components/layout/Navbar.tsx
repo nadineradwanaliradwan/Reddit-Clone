@@ -9,6 +9,7 @@ import { useTheme } from '@/context/theme-context'
 import { useAuth } from '@/context/auth-context'
 import { useState } from 'react'
 import { useUnreadCountQuery } from '@/hooks/use-reddit-query'
+import redditLogo from '@/reddit_logo.png'
 
 export function Navbar() {
   const [term, setTerm] = useState('')
@@ -48,15 +49,15 @@ export function Navbar() {
             </SheetContent>
           </Sheet>
           <Link to="/" className="flex items-center gap-2">
-            <div className="bg-primary rounded-md p-1"><div className="w-5 h-5 border-2 border-white rounded-sm flex items-center justify-center"><span className="text-white font-bold text-xs">E</span></div></div>
-            <span className="font-bold text-xl tracking-tight text-primary hidden sm:block">EchoFeed</span>
+            <img src={redditLogo} alt="reddit" className="w-8 h-8 object-contain" />
+            <span className="font-bold text-xl tracking-tight text-primary hidden sm:block">reddit</span>
           </Link>
         </div>
 
         <form onSubmit={onSearch} className="flex-1 max-w-xl mx-auto hidden md:block">
           <div className="relative group">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input value={term} onChange={(e) => setTerm(e.target.value)} type="search" placeholder="Search EchoFeed..." className="w-full bg-muted border-none pl-9 focus-visible:ring-1 focus-visible:ring-primary" />
+            <Input value={term} onChange={(e) => setTerm(e.target.value)} type="search" placeholder="Search reddit..." className="w-full bg-muted border-none pl-9 focus-visible:ring-1 focus-visible:ring-primary" />
           </div>
         </form>
 
@@ -64,27 +65,56 @@ export function Navbar() {
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
             {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
           </Button>
-          <Link to="/submit"><Button variant="ghost" size="icon" aria-label="Create post"><Plus className="h-5 w-5" /></Button></Link>
-          <Link to="/notifications">
-            <Button variant="ghost" size="icon" className="relative" aria-label="Open notifications">
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && <span className="absolute top-2 right-2.5 w-2 h-2 bg-primary rounded-full border-2 border-background" />}
-            </Button>
-          </Link>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Avatar className="h-8 w-8 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all ml-2">
-                <AvatarImage src={user?.avatar} />
-                <AvatarFallback>{user?.username.slice(0, 2).toUpperCase() ?? 'GU'}</AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <Link to={`/u/${user?.username ?? 'guest'}`}><DropdownMenuItem className="cursor-pointer font-medium">My Profile</DropdownMenuItem></Link>
-              <Link to="/settings"><DropdownMenuItem className="cursor-pointer font-medium">User Settings</DropdownMenuItem></Link>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="text-destructive font-medium cursor-pointer">Log Out</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          
+          {user ? (
+            <>
+              <Link to="/submit">
+                <Button variant="ghost" size="icon" aria-label="Create post">
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link to="/notifications">
+                <Button variant="ghost" size="icon" className="relative" aria-label="Open notifications">
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2 right-2.5 w-2 h-2 bg-primary rounded-full border-2 border-background" />
+                  )}
+                </Button>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Avatar className="h-8 w-8 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all ml-2">
+                    <AvatarImage src={user?.avatar} />
+                    <AvatarFallback>{user?.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <Link to={`/u/${user?.username}`}>
+                    <DropdownMenuItem className="cursor-pointer font-medium">My Profile</DropdownMenuItem>
+                  </Link>
+                  <Link to="/settings">
+                    <DropdownMenuItem className="cursor-pointer font-medium">User Settings</DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onSelect={handleLogout} 
+                    className="text-destructive font-medium cursor-pointer"
+                  >
+                    Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 ml-2">
+              <Link to="/login">
+                <Button variant="ghost" size="sm" className="font-bold">Log In</Button>
+              </Link>
+              <Link to="/register">
+                <Button size="sm" className="font-bold rounded-full px-5">Sign Up</Button>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </nav>

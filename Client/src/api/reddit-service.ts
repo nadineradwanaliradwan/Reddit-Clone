@@ -68,8 +68,9 @@ export const redditService = {
     return post
   },
   getSubreddits: async () => {
-    // Backend searchCommunities with empty query returns all viewable communities
-    const data = await apiRequest<{ success: boolean; communities: any[] }>('/reddit/search/communities?q=')
+    // Backend searchCommunities requires a non-empty query. 
+    // Using '_' as a common character to return a majority of communities as a workaround.
+    const data = await apiRequest<{ success: boolean; communities: any[] }>('/reddit/search/communities?q=_')
     return data.communities.map((s: any) => ({
       name: s.name,
       description: s.description,
@@ -90,6 +91,18 @@ export const redditService = {
       icon: s.icon || 'Hash',
       createdAt: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'unknown',
     } as SubredditInfo
+  },
+  createCommunity: async (data: any) => {
+    return await apiRequest<{ success: boolean; community: any }>('/reddit/communities', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+  updateProfile: async (data: { username?: string; email?: string }) => {
+    return await apiRequest<{ success: boolean; user: any }>('/reddit/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
   getPostsBySubreddit: async (subreddit: string) => {
     const data = await apiRequest<{ success: boolean; posts: any[] }>(`/reddit/posts/community/${subreddit}`)

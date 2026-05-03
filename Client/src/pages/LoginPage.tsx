@@ -46,7 +46,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
       <div className="w-full max-w-md border rounded-xl p-8 bg-card shadow-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold">Sign in to EchoFeed</h1>
+          <h1 className="text-2xl font-bold">Sign in to reddit</h1>
           <p className="text-sm text-muted-foreground mt-1">Enter your details to continue</p>
         </div>
         

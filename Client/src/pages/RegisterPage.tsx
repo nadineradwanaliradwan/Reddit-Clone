@@ -11,7 +11,10 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 const schema = z.object({ 
-  username: z.string().min(3, 'Username must be at least 3 characters'),
+  username: z.string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(30, 'Username cannot exceed 30 characters')
+    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
   email: z.string().email('Please enter a valid email address'), 
   password: z.string().min(6, 'Password must be at least 6 characters') 
 })
@@ -48,7 +51,7 @@ export function RegisterPage() {
       <div className="w-full max-w-md border rounded-xl p-8 bg-card shadow-sm">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold">Create an account</h1>
-          <p className="text-sm text-muted-foreground mt-1">Join the EchoFeed community today</p>
+          <p className="text-sm text-muted-foreground mt-1">Join the reddit community today</p>
         </div>
         
         <Form {...form}>
