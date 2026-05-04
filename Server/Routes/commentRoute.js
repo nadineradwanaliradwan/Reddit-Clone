@@ -12,6 +12,8 @@ const {
   saveComment,
   unsaveComment,
   listSavedComments,
+  upvoteComment,
+  downvoteComment,
 } = require('../Controllers/commentController');
 
 // ─── Validation rules ────────────────────────────────────────────────────────
@@ -38,11 +40,13 @@ postScopedRouter.post('/', protect, commentBodyValidation, createComment);
 
 const commentRouter = express.Router();
 
-commentRouter.get('/saved',         protect, listSavedComments);
-commentRouter.post('/:id/reply',    protect, commentBodyValidation, createReply);
-commentRouter.post('/:id/save',     protect, saveComment);
-commentRouter.delete('/:id/save',   protect, unsaveComment);
-commentRouter.patch('/:id',         protect, commentBodyValidation, updateComment);
-commentRouter.delete('/:id',        protect, deleteComment);
+commentRouter.get('/saved',           protect, listSavedComments);
+commentRouter.post('/:id/reply',      protect, commentBodyValidation, createReply);
+commentRouter.post('/:id/upvote',     protect, upvoteComment);
+commentRouter.post('/:id/downvote',   protect, downvoteComment);
+commentRouter.post('/:id/save',       protect, saveComment);
+commentRouter.delete('/:id/save',     protect, unsaveComment);
+commentRouter.patch('/:id',           protect, commentBodyValidation, updateComment);
+commentRouter.delete('/:id',          protect, deleteComment);
 
 module.exports = { postScopedRouter, commentRouter };

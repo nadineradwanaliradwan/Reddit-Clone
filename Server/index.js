@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const connectDB = require('./Config/database');
 const authRoutes = require('./Routes/authRoute');
 const userRoutes = require('./Routes/userRoute');
+const { publicRouter: publicUserRoutes } = require('./Routes/userRoute');
 const adminRoutes = require('./Routes/adminRoute');
 const communityRoutes = require('./Routes/communityRoute');
 const postRoutes = require('./Routes/postRoute');
@@ -36,6 +37,7 @@ const authLimiter = rateLimit({
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ success: true, message: 'API is running' }));
 app.use('/reddit/auth', authLimiter, authRoutes);
+app.use('/reddit/users', publicUserRoutes);
 app.use('/reddit/users', protect, userRoutes);
 app.use('/reddit/admin', adminRoutes);
 app.use('/reddit/communities', communityRoutes);

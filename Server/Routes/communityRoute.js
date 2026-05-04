@@ -4,6 +4,7 @@ const { protect } = require('../Middlewares/authMiddleware');
 const { optionalProtect } = require('../Middlewares/optionalProtect');
 const {
   createCommunity,
+  listCommunities,
   joinCommunity,
   leaveCommunity,
   getCommunity,
@@ -52,9 +53,9 @@ const updateFlairValidation = [
 ];
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
-// Get community details by name (optional authentication)
-router.get('/:name',optionalProtect, getCommunity); // tested
-router.post('/',protect, createCommunity); //tested
+router.get('/',        optionalProtect, listCommunities);
+router.get('/:name',   optionalProtect, getCommunity); // tested
+router.post('/',       protect, createCommunity); //tested
 router.post('/:name/join', protect, joinCommunity);//tested
 router.post('/:name/leave', protect, leaveCommunity);//tested
 

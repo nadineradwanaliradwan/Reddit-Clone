@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const User = require('../Models/authModel');
+const Post = require('../Models/postModel');
 
 const generateAccessToken = (userId, role) =>
   jwt.sign({ id: userId, role }, process.env.JWT_SECRET, {
@@ -104,4 +105,39 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { updateProfile, changePassword };
+// ─── @route  GET /reddit/users/:username/posts ────────────────────────────────
+// ─── @access Public ──────────────────────────────────────────────────────────
+const getUserPosts = async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const skip  = (page - 1) * limit;
+
+  try {
+    const user = await User.findOne({ username: req.params.username, isActive: true }).select('_id username');
+    if (!user)
+      return res.status(404).json({ success: false, message: 'User not found' });
+
+    const [posts, total] = await Promise.all([
+      Post.find({ author: user._id, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('author', 'username')
+        .populate('community', 'name'),
+      Post.countDocuments({ author: user._id, isDeleted: false }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      posts,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = { updateProfile, changePassword, getUserPosts };

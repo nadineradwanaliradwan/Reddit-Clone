@@ -43,6 +43,10 @@ const commentSchema = new mongoose.Schema(
       type:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
       default: [],
     },
+    upvotes:   { type: Number, default: 0, min: 0 },
+    downvotes: { type: Number, default: 0, min: 0 },
+    score:     { type: Number, default: 0, index: true },
+
     isDeleted: {
       type:    Boolean,
       default: false,

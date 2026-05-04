@@ -4,6 +4,7 @@ export interface Comment {
   content: string;
   timestamp: string;
   votes: number;
+  userVote?: number;
   replies?: Comment[];
 }
 
@@ -28,6 +29,7 @@ export interface SubredditInfo {
   online: number;
   icon: string;
   createdAt: string;
+  isMember?: boolean;
 }
 
 export interface Notification {

@@ -52,3 +52,57 @@ export const useDeleteNotificationMutation = () => {
     },
   })
 }
+
+export const useJoinCommunityMutation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: redditService.joinCommunity,
+    onSuccess: (_data, name) => {
+      queryClient.invalidateQueries({ queryKey: ['subreddit', name] })
+      queryClient.invalidateQueries({ queryKey: ['subreddits'] })
+    },
+  })
+}
+
+export const useLeaveCommunityMutation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: redditService.leaveCommunity,
+    onSuccess: (_data, name) => {
+      queryClient.invalidateQueries({ queryKey: ['subreddit', name] })
+      queryClient.invalidateQueries({ queryKey: ['subreddits'] })
+    },
+  })
+}
+
+export const useCreateCommentMutation = (postId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: string) => redditService.createComment(postId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['post', postId] })
+    },
+  })
+}
+
+export const useCreateReplyMutation = (postId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+      redditService.createReply(commentId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['post', postId] })
+    },
+  })
+}
+
+export const useDeletePostMutation = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: redditService.deletePost,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['popular'] })
+    },
+  })
+}

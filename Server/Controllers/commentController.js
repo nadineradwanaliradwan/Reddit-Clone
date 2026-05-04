@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { validationResult } = require('express-validator');
 const Comment      = require('../Models/commentModel');
+const CommentVote  = require('../Models/commentVoteModel');
 const Post         = require('../Models/postModel');
 const Community    = require('../Models/communityModel');
 const Membership   = require('../Models/membershipModel');
@@ -375,6 +376,66 @@ const listSavedComments = async (req, res) => {
   }
 };
 
+// ─── @route  POST /reddit/comments/:id/upvote|downvote ───────────────────────
+// ─── @access Private ─────────────────────────────────────────────────────────
+const voteComment = async (req, res, nextValue) => {
+  const { id } = req.params;
+  if (!isValidObjectId(id))
+    return res.status(404).json({ success: false, message: 'Comment not found' });
+
+  try {
+    const comment = await Comment.findById(id);
+    if (!comment || comment.isDeleted)
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    const existingVote = await CommentVote.findOne({ user: req.user.id, comment: comment._id });
+
+    let upvoteDelta = 0;
+    let downvoteDelta = 0;
+    let userVote = nextValue;
+    let message = nextValue === 1 ? 'Comment upvoted' : 'Comment downvoted';
+
+    if (!existingVote) {
+      await CommentVote.create({ user: req.user.id, comment: comment._id, value: nextValue });
+      if (nextValue === 1) upvoteDelta = 1;
+      else downvoteDelta = 1;
+    } else if (existingVote.value === nextValue) {
+      await existingVote.deleteOne();
+      if (nextValue === 1) upvoteDelta = -1;
+      else downvoteDelta = -1;
+      userVote = 0;
+      message = 'Vote removed';
+    } else {
+      const previousValue = existingVote.value;
+      existingVote.value = nextValue;
+      await existingVote.save();
+      if (previousValue === 1) { upvoteDelta = -1; downvoteDelta = 1; }
+      else { upvoteDelta = 1; downvoteDelta = -1; }
+      message = nextValue === 1 ? 'Changed vote to upvote' : 'Changed vote to downvote';
+    }
+
+    const updated = await Comment.findByIdAndUpdate(
+      comment._id,
+      { $inc: { upvotes: upvoteDelta, downvotes: downvoteDelta, score: upvoteDelta - downvoteDelta } },
+      { returnDocument: 'after' },
+    ).select('upvotes downvotes score');
+
+    res.status(200).json({
+      success: true,
+      message,
+      upvotes: updated.upvotes,
+      downvotes: updated.downvotes,
+      score: updated.score,
+      userVote,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+const upvoteComment   = (req, res) => voteComment(req, res, 1);
+const downvoteComment = (req, res) => voteComment(req, res, -1);
+
 module.exports = {
   listComments,
   createComment,
@@ -384,4 +445,6 @@ module.exports = {
   saveComment,
   unsaveComment,
   listSavedComments,
+  upvoteComment,
+  downvoteComment,
 };

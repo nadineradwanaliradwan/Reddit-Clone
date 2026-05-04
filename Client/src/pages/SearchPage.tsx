@@ -37,7 +37,7 @@ export function SearchPage() {
           {posts.map((post) => <PostCard key={post.id} post={post} />)}
           {posts.length === 0 && (
             <div className="text-center py-20 bg-muted/20 rounded-2xl border border-dashed">
-              <p className="text-muted-foreground italic text-sm">Post search is currently unavailable. Showing 0 results.</p>
+              <p className="text-muted-foreground italic text-sm">No posts found matching "{q}".</p>
             </div>
           )}
         </TabsContent>

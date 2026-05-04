@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/pages/AppLayout'
 import { HomePage } from '@/pages/HomePage'
 import { PopularPage } from '@/pages/PopularPage'
@@ -14,6 +14,14 @@ import { NotificationsPage } from '@/pages/NotificationsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { useAuth } from '@/context/auth-context'
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+  if (isLoading) return null
+  if (!user) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -30,9 +38,9 @@ export const router = createBrowserRouter([
       { path: 'r/:subreddit', element: <SubredditPage /> },
       { path: 'u/:username', element: <ProfilePage /> },
       { path: 'search', element: <SearchPage /> },
-      { path: 'submit', element: <SubmitPostPage /> },
-      { path: 'settings', element: <SettingsPage /> },
-      { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'submit', element: <PrivateRoute><SubmitPostPage /></PrivateRoute> },
+      { path: 'settings', element: <PrivateRoute><SettingsPage /></PrivateRoute> },
+      { path: 'notifications', element: <PrivateRoute><NotificationsPage /></PrivateRoute> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

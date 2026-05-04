@@ -20,8 +20,9 @@ const mapBackendComment = (c: any): Comment => ({
   author: c.author?.username || 'unknown',
   content: c.body,
   timestamp: c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : 'unknown',
-  votes: 0, // Backend doesn't have comment voting yet
-  replies: [], // Replies need to be nested manually if returned flat
+  votes: c.score || 0,
+  userVote: c.userVote || 0,
+  replies: [],
 })
 
 const nestComments = (flatComments: any[]): Comment[] => {
@@ -68,9 +69,7 @@ export const redditService = {
     return post
   },
   getSubreddits: async () => {
-    // Backend searchCommunities requires a non-empty query. 
-    // Using '_' as a common character to return a majority of communities as a workaround.
-    const data = await apiRequest<{ success: boolean; communities: any[] }>('/reddit/search/communities?q=_')
+    const data = await apiRequest<{ success: boolean; communities: any[] }>('/reddit/communities?limit=100')
     return data.communities.map((s: any) => ({
       name: s.name,
       description: s.description,
@@ -81,7 +80,7 @@ export const redditService = {
     }))
   },
   getSubreddit: async (name: string) => {
-    const data = await apiRequest<{ success: boolean; community: any }>(`/reddit/communities/${name}`)
+    const data = await apiRequest<{ success: boolean; community: any; isMember: boolean }>(`/reddit/communities/${name}`)
     const s = data.community
     return {
       name: s.name,
@@ -90,7 +89,14 @@ export const redditService = {
       online: 0,
       icon: s.icon || 'Hash',
       createdAt: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'unknown',
+      isMember: data.isMember,
     } as SubredditInfo
+  },
+  joinCommunity: async (name: string) => {
+    return await apiRequest(`/reddit/communities/${name}/join`, { method: 'POST' })
+  },
+  leaveCommunity: async (name: string) => {
+    return await apiRequest(`/reddit/communities/${name}/leave`, { method: 'POST' })
   },
   createCommunity: async (data: any) => {
     return await apiRequest<{ success: boolean; community: any }>('/reddit/communities', {
@@ -109,18 +115,39 @@ export const redditService = {
     return data.posts.map(mapBackendPost)
   },
   getPostsByUser: async (username: string): Promise<Post[]> => {
-    // Backend doesn't have a direct "posts by user" route yet.
-    // Recommended in backend-recommendations.md
-    return []
+    const data = await apiRequest<{ success: boolean; posts: any[] }>(`/reddit/users/${username}/posts`)
+    return data.posts.map(mapBackendPost)
+  },
+  deletePost: async (id: string) => {
+    return await apiRequest(`/reddit/posts/${id}`, { method: 'DELETE' })
+  },
+  createComment: async (postId: string, body: string) => {
+    const data = await apiRequest<{ success: boolean; comment: any }>(`/reddit/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    })
+    return mapBackendComment(data.comment)
+  },
+  createReply: async (commentId: string, body: string) => {
+    const data = await apiRequest<{ success: boolean; comment: any }>(`/reddit/comments/${commentId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    })
+    return mapBackendComment(data.comment)
+  },
+  voteComment: async (commentId: string, type: 1 | -1) => {
+    const endpoint = type === 1 ? `/reddit/comments/${commentId}/upvote` : `/reddit/comments/${commentId}/downvote`
+    return await apiRequest<{ success: boolean; score: number; userVote: number }>(endpoint, { method: 'POST' })
   },
   searchPostsAndSubs: async (query: string): Promise<{ posts: Post[]; communities: any[]; users: any[] }> => {
-    const [communityData, userData] = await Promise.all([
-      apiRequest<{ success: boolean; communities: any[] }>(`/reddit/search/communities?q=${query}`),
-      apiRequest<{ success: boolean; users: any[] }>(`/reddit/search/users?q=${query}`)
+    const encoded = encodeURIComponent(query)
+    const [communityData, userData, postData] = await Promise.all([
+      apiRequest<{ success: boolean; communities: any[] }>(`/reddit/search/communities?q=${encoded}`),
+      apiRequest<{ success: boolean; users: any[] }>(`/reddit/search/users?q=${encoded}`),
+      apiRequest<{ success: boolean; posts: any[] }>(`/reddit/search/posts?q=${encoded}`),
     ])
-    
     return {
-      posts: [], // Search only supports communities and users for now
+      posts: postData.posts.map(mapBackendPost),
       communities: communityData.communities.map((s: any) => ({
         name: s.name,
         description: s.description,

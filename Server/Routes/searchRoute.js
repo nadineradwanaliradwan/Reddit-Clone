@@ -1,7 +1,7 @@
 const express = require('express');
 const { query } = require('express-validator');
 const { optionalProtect } = require('../Middlewares/optionalProtect');
-const { searchUsers, searchCommunities } = require('../Controllers/searchController');
+const { searchUsers, searchCommunities, searchPosts } = require('../Controllers/searchController');
 
 const router = express.Router();
 
@@ -14,5 +14,6 @@ const searchValidation = [
 
 router.get('/users', optionalProtect, searchValidation, searchUsers);
 router.get('/communities', optionalProtect, searchValidation, searchCommunities);
+router.get('/posts', optionalProtect, searchValidation, searchPosts);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { updateProfile, changePassword } = require('../Controllers/userController');
+const { optionalProtect } = require('../Middlewares/optionalProtect');
+const { updateProfile, changePassword, getUserPosts } = require('../Controllers/userController');
 
 const router = express.Router();
 
@@ -29,3 +30,8 @@ router.patch('/me', profileValidation, updateProfile); //tested
 router.patch('/me/password', passwordValidation, changePassword); //tested
 
 module.exports = router;
+
+// ─── Public user routes (no auth required) ───────────────────────────────────
+const publicRouter = express.Router();
+publicRouter.get('/:username/posts', optionalProtect, getUserPosts);
+module.exports.publicRouter = publicRouter;

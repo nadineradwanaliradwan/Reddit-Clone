@@ -195,6 +195,46 @@ const leaveCommunity = async (req, res) => {
   }
 };
 
+// ─── @route  GET /reddit/communities ─────────────────────────────────────────
+// ─── @access Public (private communities hidden unless member) ───────────────
+const listCommunities = async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const skip  = (page - 1) * limit;
+
+  try {
+    const visibility = [{ type: { $in: ['public', 'restricted'] } }];
+
+    if (req.user) {
+      const memberships = await Membership.find({ user: req.user.id }).select('community');
+      const memberIds = memberships.map(m => m.community);
+      if (memberIds.length > 0) visibility.push({ _id: { $in: memberIds } });
+    }
+
+    const filter = { $or: visibility };
+
+    const [communities, total] = await Promise.all([
+      Community.find(filter)
+        .select('_id name description type memberCount icon banner isNSFW createdAt')
+        .sort({ memberCount: -1, name: 1 })
+        .skip(skip)
+        .limit(limit),
+      Community.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      communities,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
 // ─── @route  GET /reddit/communities/:name ───────────────────────────────────
 // ─── @access Public (private communities: members only) ──────────────────────
 const getCommunity = async (req, res) => {
@@ -219,7 +259,13 @@ const getCommunity = async (req, res) => {
         return res.status(404).json({ success: false, message: 'Community not found' });
     }
 
-    res.status(200).json({ success: true, community });
+    let isMember = false;
+    if (req.user) {
+      const membership = await Membership.findOne({ user: req.user.id, community: community._id });
+      isMember = !!membership;
+    }
+
+    res.status(200).json({ success: true, community, isMember });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
@@ -373,6 +419,7 @@ const deleteFlair = async (req, res) => {
 
 module.exports = {
   createCommunity,
+  listCommunities,
   joinCommunity,
   leaveCommunity,
   getCommunity,

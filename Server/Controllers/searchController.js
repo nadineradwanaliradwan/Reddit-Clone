@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const User = require('../Models/authModel');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
+const Post = require('../Models/postModel');
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE     = 50;
@@ -107,4 +108,58 @@ const searchCommunities = async (req, res) => {
   }
 };
 
-module.exports = { searchUsers, searchCommunities };
+// ─── @route  GET /reddit/search/posts?q= ─────────────────────────────────────
+// ─── @access Public ──────────────────────────────────────────────────────────
+const searchPosts = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json({ success: false, errors: errors.array() });
+
+  const query = req.query.q.trim();
+  const { page, limit, skip } = getPagination(req.query);
+  const regex = getSearchRegex(query);
+
+  try {
+    const filter = {
+      isDeleted: false,
+      $or: [{ title: regex }, { body: regex }],
+    };
+
+    const [posts, total] = await Promise.all([
+      Post.find(filter)
+        .sort({ score: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('author', 'username')
+        .populate('community', 'name type'),
+      Post.countDocuments(filter),
+    ]);
+
+    // Exclude posts from private communities the user isn't a member of
+    let visiblePosts = posts;
+    if (posts.some(p => p.community?.type === 'private')) {
+      let memberCommunityIds = new Set();
+      if (req.user) {
+        const memberships = await Membership.find({ user: req.user.id }).select('community');
+        memberCommunityIds = new Set(memberships.map(m => String(m.community)));
+      }
+      visiblePosts = posts.filter(p =>
+        !p.community || p.community.type !== 'private' || memberCommunityIds.has(String(p.community._id))
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      query,
+      page,
+      limit,
+      total: visiblePosts.length,
+      totalPages: Math.ceil(total / limit),
+      posts: visiblePosts,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = { searchUsers, searchCommunities, searchPosts };

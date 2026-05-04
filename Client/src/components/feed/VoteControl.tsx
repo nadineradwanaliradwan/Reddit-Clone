@@ -12,10 +12,11 @@ interface VoteControlProps {
   vertical?: boolean
   className?: string
   postId?: string
+  commentId?: string
   initialUserVote?: number
 }
 
-export function VoteControl({ initialVotes, vertical = true, className, postId, initialUserVote = 0 }: VoteControlProps) {
+export function VoteControl({ initialVotes, vertical = true, className, postId, commentId, initialUserVote = 0 }: VoteControlProps) {
   const [voteStatus, setVoteStatus] = useState<number>(initialUserVote)
   const [count, setCount] = useState(initialVotes)
   const { toast } = useToast()
@@ -39,18 +40,20 @@ export function VoteControl({ initialVotes, vertical = true, className, postId, 
     setVoteStatus(nextStatus)
     setCount(nextCount)
 
-    if (postId) {
+    const endpoint = postId
+      ? (type === 1 ? `/reddit/posts/${postId}/upvote` : `/reddit/posts/${postId}/downvote`)
+      : commentId
+      ? (type === 1 ? `/reddit/comments/${commentId}/upvote` : `/reddit/comments/${commentId}/downvote`)
+      : null
+
+    if (endpoint) {
       try {
-        const endpoint = type === 1 ? `/reddit/posts/${postId}/upvote` : `/reddit/posts/${postId}/downvote`
-        const data = await apiRequest<{ success: boolean; score: number; userVote: number }>(endpoint, {
-          method: 'POST'
-        })
+        const data = await apiRequest<{ success: boolean; score: number; userVote: number }>(endpoint, { method: 'POST' })
         if (data.success) {
           setCount(data.score)
           setVoteStatus(data.userVote)
         }
       } catch (err: any) {
-        // Rollback on error
         setVoteStatus(oldStatus)
         setCount(oldCount)
         toast({
