@@ -3,6 +3,7 @@ const User = require('../Models/authModel');
 const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
 const Post = require('../Models/postModel');
+const Follow = require('../Models/followModel');
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE     = 50;
@@ -43,6 +44,22 @@ const searchUsers = async (req, res) => {
       User.countDocuments(filter),
     ]);
 
+    let followingSet = new Set();
+    if (req.user && users.length) {
+      const follows = await Follow.find({
+        follower: req.user.id,
+        following: { $in: users.map(u => u._id) },
+      }).select('following');
+      followingSet = new Set(follows.map(f => String(f.following)));
+    }
+
+    const usersWithFollow = users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      createdAt: u.createdAt,
+      isFollowing: followingSet.has(String(u._id)),
+    }));
+
     res.status(200).json({
       success: true,
       query,
@@ -50,7 +67,7 @@ const searchUsers = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      users,
+      users: usersWithFollow,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });

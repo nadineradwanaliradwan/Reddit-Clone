@@ -204,10 +204,12 @@ const listCommunities = async (req, res) => {
 
   try {
     const visibility = [{ type: { $in: ['public', 'restricted'] } }];
+    let membershipSet = new Set();
 
     if (req.user) {
       const memberships = await Membership.find({ user: req.user.id }).select('community');
       const memberIds = memberships.map(m => m.community);
+      membershipSet = new Set(memberIds.map(id => String(id)));
       if (memberIds.length > 0) visibility.push({ _id: { $in: memberIds } });
     }
 
@@ -222,13 +224,18 @@ const listCommunities = async (req, res) => {
       Community.countDocuments(filter),
     ]);
 
+    const communitiesWithMembership = communities.map(c => ({
+      ...c.toObject(),
+      isMember: membershipSet.has(String(c._id)),
+    }));
+
     res.status(200).json({
       success: true,
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      communities,
+      communities: communitiesWithMembership,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });

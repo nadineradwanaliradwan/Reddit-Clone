@@ -6,6 +6,7 @@ const Community = require('../Models/communityModel');
 const Membership = require('../Models/membershipModel');
 const SavedPost = require('../Models/savedPostModel');
 const PostVote = require('../Models/postVoteModel');
+const Comment = require('../Models/commentModel');
 const { summarizePost: aiSummarize } = require('../Services/aiService');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -97,6 +98,27 @@ const getUserVoteForPost = async (postId, userId) => {
   return vote ? vote.value : 0;
 };
 
+const attachCommentCounts = async (posts) => {
+  if (!posts.length) return posts;
+  const counts = await Comment.aggregate([
+    { $match: { post: { $in: posts.map(p => p._id) }, isDeleted: false } },
+    { $group: { _id: '$post', count: { $sum: 1 } } },
+  ]);
+  const countMap = new Map(counts.map(c => [String(c._id), c.count]));
+  return posts.map(p => ({ ...p, commentCount: countMap.get(String(p._id)) || 0 }));
+};
+
+const attachSavedStatus = async (posts, userId) => {
+  if (!posts.length) return posts;
+  if (!userId) return posts.map(p => ({ ...p, isSaved: false }));
+  const saves = await SavedPost.find({
+    user: userId,
+    post: { $in: posts.map(p => p._id) },
+  }).select('post');
+  const savedSet = new Set(saves.map(s => String(s.post)));
+  return posts.map(p => ({ ...p, isSaved: savedSet.has(String(p._id)) }));
+};
+
 // ─── @route  POST /reddit/posts ──────────────────────────────────────────────
 // ─── @access Private ─────────────────────────────────────────────────────────
 const createPost = async (req, res) => {
@@ -186,8 +208,15 @@ const getPost = async (req, res) => {
 
     // Soft-deleted posts still respond 200 with a redacted body (toJSON handles the redaction).
     // This mirrors Reddit: a deleted post's URL still works but the content is gone.
-    const userVote = await getUserVoteForPost(post._id, userId);
-    res.status(200).json({ success: true, post: toPostResponse(post, userVote) });
+    const [userVote, commentCount, savedDoc] = await Promise.all([
+      getUserVoteForPost(post._id, userId),
+      Comment.countDocuments({ post: post._id, isDeleted: false }),
+      userId ? SavedPost.findOne({ user: userId, post: post._id }).select('_id') : Promise.resolve(null),
+    ]);
+    const postResponse = toPostResponse(post, userVote);
+    postResponse.commentCount = commentCount;
+    postResponse.isSaved = !!savedDoc;
+    res.status(200).json({ success: true, post: postResponse });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
@@ -279,6 +308,8 @@ const listPostsByCommunity = async (req, res) => {
     ]);
 
     const postsWithVotes = await attachUserVotes(posts, userId);
+    const postsWithCounts = await attachCommentCounts(postsWithVotes);
+    const postsWithAll = await attachSavedStatus(postsWithCounts, userId);
 
     res.status(200).json({
       success: true,
@@ -305,7 +336,7 @@ const listPostsByCommunity = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      posts: postsWithVotes,
+      posts: postsWithAll,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
@@ -627,6 +658,8 @@ const listFeed = async (req, res) => {
     }
 
     const postsWithVotes = await attachUserVotes(posts, userId);
+    const postsWithCounts = await attachCommentCounts(postsWithVotes);
+    const postsWithAll = await attachSavedStatus(postsWithCounts, userId);
 
     res.status(200).json({
       success: true,
@@ -639,7 +672,7 @@ const listFeed = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      posts: postsWithVotes,
+      posts: postsWithAll,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error', error: err.message });

@@ -5,14 +5,18 @@ import { formatDistanceToNow } from 'date-fns'
 const mapBackendPost = (p: any): Post => ({
   id: p._id,
   title: p.title,
-  content: p.body || p.url || p.imageUrl || '',
+  content: p.body || '',
+  type: p.type,
+  url: p.url,
   author: p.author?.username || 'unknown',
   subreddit: p.community?.name || 'unknown',
   votes: p.score || 0,
-  commentCount: 0, // Backend doesn't provide this yet
+  commentCount: p.commentCount || 0,
   timestamp: p.createdAt ? formatDistanceToNow(new Date(p.createdAt), { addSuffix: true }) : 'unknown',
   imageUrl: p.imageUrl,
   comments: [],
+  userVote: p.userVote || 0,
+  isSaved: p.isSaved || false,
 })
 
 const mapBackendComment = (c: any): Comment => ({
@@ -49,8 +53,8 @@ const nestComments = (flatComments: any[]): Comment[] => {
 }
 
 export const redditService = {
-  getFeed: async () => {
-    const data = await apiRequest<{ success: boolean; posts: any[] }>('/reddit/posts/feed?scope=popular')
+  getFeed: async (scope: 'home' | 'popular' = 'popular') => {
+    const data = await apiRequest<{ success: boolean; posts: any[] }>(`/reddit/posts/feed?scope=${scope}`)
     return data.posts.map(mapBackendPost)
   },
   getPopular: async () => {
@@ -77,6 +81,7 @@ export const redditService = {
       online: 0,
       icon: s.icon || 'Hash',
       createdAt: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'unknown',
+      isMember: s.isMember || false,
     }))
   },
   getSubreddit: async (name: string) => {
@@ -139,6 +144,26 @@ export const redditService = {
     const endpoint = type === 1 ? `/reddit/comments/${commentId}/upvote` : `/reddit/comments/${commentId}/downvote`
     return await apiRequest<{ success: boolean; score: number; userVote: number }>(endpoint, { method: 'POST' })
   },
+  getUserProfile: async (username: string) => {
+    const data = await apiRequest<{ success: boolean; user: any }>(`/reddit/users/${username}`)
+    return data.user
+  },
+  followUser: async (username: string) => {
+    return await apiRequest(`/reddit/users/${username}/follow`, { method: 'POST' })
+  },
+  unfollowUser: async (username: string) => {
+    return await apiRequest(`/reddit/users/${username}/follow`, { method: 'DELETE' })
+  },
+  getSavedPosts: async () => {
+    const data = await apiRequest<{ success: boolean; posts: any[] }>('/reddit/posts/feed?scope=saved')
+    return data.posts.map(mapBackendPost)
+  },
+  savePost: async (id: string) => {
+    return await apiRequest(`/reddit/posts/${id}/save`, { method: 'POST' })
+  },
+  unsavePost: async (id: string) => {
+    return await apiRequest(`/reddit/posts/${id}/save`, { method: 'DELETE' })
+  },
   searchPostsAndSubs: async (query: string): Promise<{ posts: Post[]; communities: any[]; users: any[] }> => {
     const encoded = encodeURIComponent(query)
     const [communityData, userData, postData] = await Promise.all([
@@ -157,7 +182,8 @@ export const redditService = {
       users: userData.users.map((u: any) => ({
         id: u._id,
         username: u.username,
-        avatar: `https://picsum.photos/seed/${u.username}/100/100`
+        avatar: `https://picsum.photos/seed/${u.username}/100/100`,
+        isFollowing: u.isFollowing || false,
       }))
     }
   },

@@ -1,7 +1,8 @@
 const express = require('express');
 const { body } = require('express-validator');
+const { protect } = require('../Middlewares/authMiddleware');
 const { optionalProtect } = require('../Middlewares/optionalProtect');
-const { updateProfile, changePassword, getUserPosts } = require('../Controllers/userController');
+const { updateProfile, changePassword, getUserPosts, getUserProfile, followUser, unfollowUser } = require('../Controllers/userController');
 
 const router = express.Router();
 
@@ -26,12 +27,17 @@ const passwordValidation = [
     .withMessage('New password must be at least 6 characters'),
 ];
 
-router.patch('/me', profileValidation, updateProfile); //tested
-router.patch('/me/password', passwordValidation, changePassword); //tested
+// Protected routes (protect applied globally at app level)
+router.patch('/me', profileValidation, updateProfile);
+router.patch('/me/password', passwordValidation, changePassword);
+router.post('/:username/follow', followUser);
+router.delete('/:username/follow', unfollowUser);
 
 module.exports = router;
 
 // ─── Public user routes (no auth required) ───────────────────────────────────
 const publicRouter = express.Router();
+// Order matters: more specific paths before /:username
 publicRouter.get('/:username/posts', optionalProtect, getUserPosts);
+publicRouter.get('/:username', optionalProtect, getUserProfile);
 module.exports.publicRouter = publicRouter;

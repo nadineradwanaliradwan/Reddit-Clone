@@ -17,9 +17,12 @@ export interface Post {
   votes: number;
   commentCount: number;
   timestamp: string;
+  type?: 'text' | 'link' | 'image';
+  url?: string;
   imageUrl?: string;
   comments: Comment[];
   userVote?: number;
+  isSaved?: boolean;
 }
 
 export interface SubredditInfo {
