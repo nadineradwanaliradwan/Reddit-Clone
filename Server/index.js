@@ -1,17 +1,20 @@
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { Server } = require('socket.io');
 const connectDB = require('./Config/database');
 const authRoutes = require('./Routes/authRoute');
 const userRoutes = require('./Routes/userRoute');
-const { publicRouter: publicUserRoutes } = require('./Routes/userRoute');
 const adminRoutes = require('./Routes/adminRoute');
 const communityRoutes = require('./Routes/communityRoute');
 const postRoutes = require('./Routes/postRoute');
 const { postScopedRouter, commentRouter } = require('./Routes/commentRoute');
 const notificationRoutes = require('./Routes/notificationRoute');
 const searchRoutes = require('./Routes/searchRoute');
+const chatRoutes = require('./Routes/chatRoute');
+const chatSocket = require('./Sockets/chatSocket');
 const { protect } = require('./Middlewares/authMiddleware');
 const dotenv = require('dotenv');
 const path = require('path');
@@ -37,7 +40,6 @@ const authLimiter = rateLimit({
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ success: true, message: 'API is running' }));
 app.use('/reddit/auth', authLimiter, authRoutes);
-app.use('/reddit/users', publicUserRoutes);
 app.use('/reddit/users', protect, userRoutes);
 app.use('/reddit/admin', adminRoutes);
 app.use('/reddit/communities', communityRoutes);
@@ -46,6 +48,7 @@ app.use('/reddit/posts', postRoutes);
 app.use('/reddit/posts/:postId/comments', postScopedRouter);
 app.use('/reddit/comments', commentRouter);
 app.use('/reddit/notifications', protect, notificationRoutes);
+app.use('/reddit/chat', protect, chatRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
@@ -57,12 +60,18 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
-if (process.env.NODE_ENV !== 'test') {
-  // Connect to MongoDB
-  connectDB();
+const server = http.createServer(app);
 
+const io = new Server(server, {
+  cors: { origin: process.env.CLIENT_URL || '*', methods: ['GET', 'POST'] },
+});
+app.set('io', io);
+chatSocket(io);
+
+if (process.env.NODE_ENV !== 'test') {
+  connectDB();
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+  server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 }
 
 module.exports = app;

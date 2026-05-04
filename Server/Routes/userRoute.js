@@ -2,7 +2,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const { protect } = require('../Middlewares/authMiddleware');
 const { optionalProtect } = require('../Middlewares/optionalProtect');
-const { updateProfile, changePassword, getUserPosts, getUserProfile, followUser, unfollowUser } = require('../Controllers/userController');
+const { updateProfile, changePassword, getUserPosts, getUserProfile, followUser, unfollowUser, getUserFollowers, getUserFollowing } = require('../Controllers/userController');
 
 const router = express.Router();
 
@@ -39,5 +39,7 @@ module.exports = router;
 const publicRouter = express.Router();
 // Order matters: more specific paths before /:username
 publicRouter.get('/:username/posts', optionalProtect, getUserPosts);
+publicRouter.get('/:username/followers', optionalProtect, getUserFollowers);
+publicRouter.get('/:username/following', optionalProtect, getUserFollowing);
 publicRouter.get('/:username', optionalProtect, getUserProfile);
 module.exports.publicRouter = publicRouter;

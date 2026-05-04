@@ -35,7 +35,4 @@ router.post('/login', loginValidation, login);// tested
 router.post('/refresh', refresh);// tested
 router.post('/logout', protect, logout);// tested
 router.get('/me', protect, getMe);// tested
-//router.post('/forgot-password', forgotPassword);
-//router.patch('/reset-password/:token', resetPassword);
-
 module.exports = router;

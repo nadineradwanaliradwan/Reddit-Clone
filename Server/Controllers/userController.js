@@ -206,4 +206,86 @@ const unfollowUser = async (req, res) => {
   }
 };
 
-module.exports = { updateProfile, changePassword, getUserPosts, getUserProfile, followUser, unfollowUser };
+// ─── @route  GET /reddit/users/:username/followers ───────────────────────────
+// ─── @access Public ─────────────────────────────────────────────────────────
+const getUserFollowers = async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const skip  = (page - 1) * limit;
+
+  try {
+    const user = await User.findOne({ username: req.params.username, isActive: true }).select('_id');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const [followers, total] = await Promise.all([
+      Follow.find({ following: user._id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('follower', 'username'),
+      Follow.countDocuments({ following: user._id }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      followers: followers.map(f => ({
+        username: f.follower.username,
+        followedAt: f.createdAt
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// ─── @route  GET /reddit/users/:username/following ───────────────────────────
+// ─── @access Public ─────────────────────────────────────────────────────────
+const getUserFollowing = async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const skip  = (page - 1) * limit;
+
+  try {
+    const user = await User.findOne({ username: req.params.username, isActive: true }).select('_id');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const [following, total] = await Promise.all([
+      Follow.find({ follower: user._id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('following', 'username'),
+      Follow.countDocuments({ follower: user._id }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      following: following.map(f => ({
+        username: f.following.username,
+        followedAt: f.createdAt
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = { 
+  updateProfile, 
+  changePassword, 
+  getUserPosts, 
+  getUserProfile, 
+  followUser, 
+  unfollowUser,
+  getUserFollowers,
+  getUserFollowing 
+};
+
