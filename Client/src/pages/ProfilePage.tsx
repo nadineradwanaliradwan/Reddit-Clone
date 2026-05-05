@@ -1,18 +1,22 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useUserPostsQuery, useSavedPostsQuery, useUserProfileQuery, useFollowUserMutation, useUnfollowUserMutation } from '@/hooks/use-reddit-query'
 import { PostCard } from '@/components/feed/PostCard'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/context/auth-context'
 import { useToast } from '@/hooks/use-toast'
+import { chatService } from '@/api/chat-service'
+import { MessageCircle } from 'lucide-react'
 
 export function ProfilePage() {
   const { username = 'guest' } = useParams()
+  const navigate = useNavigate()
   const { user: me } = useAuth()
   const { toast } = useToast()
   const isOwnProfile = me?.username === username
   const [tab, setTab] = useState<'posts' | 'saved'>('posts')
+  const [startingChat, setStartingChat] = useState(false)
 
   const { data: profile } = useUserProfileQuery(username)
   const { data: posts = [], isLoading: postsLoading } = useUserPostsQuery(username)
@@ -38,6 +42,23 @@ export function ProfilePage() {
     }
   }
 
+  // Start (or resume) a 1:1 chat with this user. The backend's
+  // POST /chat/conversations is idempotent — same pair always returns
+  // the same conversation, so we can use it as "open chat".
+  const handleStartChat = async () => {
+    if (!me) { toast({ variant: 'destructive', title: 'Sign in to message users' }); return }
+    if (!profile?._id) { toast({ variant: 'destructive', title: 'Profile not loaded yet' }); return }
+    setStartingChat(true)
+    try {
+      const conv = await chatService.startConversation(profile._id)
+      navigate(`/chat/${conv._id}`)
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: err.message || 'Could not open chat' })
+    } finally {
+      setStartingChat(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Profile header */}
@@ -57,13 +78,24 @@ export function ProfilePage() {
           </div>
         </div>
         {!isOwnProfile && (
-          <Button
-            variant={isFollowing ? 'outline' : 'default'}
-            onClick={handleFollow}
-            disabled={followMutation.isPending || unfollowMutation.isPending}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleStartChat}
+              disabled={startingChat || !profile?._id}
+              className="gap-2"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Message
+            </Button>
+            <Button
+              variant={isFollowing ? 'outline' : 'default'}
+              onClick={handleFollow}
+              disabled={followMutation.isPending || unfollowMutation.isPending}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </Button>
+          </div>
         )}
       </div>
 

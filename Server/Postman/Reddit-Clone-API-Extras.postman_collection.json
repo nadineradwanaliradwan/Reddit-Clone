@@ -1,0 +1,456 @@
+{
+  "info": {
+    "_postman_id": "f1c2a3b4-5d6e-7f80-9012-345678901234",
+    "name": "Reddit Clone API - Extras (Profiles, Follow, Chat)",
+    "description": "Supplementary collection covering the public profile routes, follow/unfollow, and chat REST endpoints that are not in the main 'Reddit Clone API - Full Backend Collection'. Run the main collection's '00 Setup' first to populate `modToken`, `memberToken`, `outsiderToken`, `modUsername`, `memberUsername`, `memberUserId`. Then run this collection in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
+    { "key": "modToken", "value": "", "type": "string" },
+    { "key": "memberToken", "value": "", "type": "string" },
+    { "key": "modUsername", "value": "", "type": "string" },
+    { "key": "memberUsername", "value": "", "type": "string" },
+    { "key": "memberUserId", "value": "", "type": "string" },
+    { "key": "conversationId", "value": "", "type": "string" },
+    { "key": "messageId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "07 Profiles + Follow",
+      "item": [
+        {
+          "name": "Get Public Profile (member viewed by mod)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('user has _id, username, followerCount, followingCount', () => {",
+                  "  pm.expect(json.user).to.have.property('_id');",
+                  "  pm.expect(json.user).to.have.property('username');",
+                  "  pm.expect(json.user).to.have.property('followerCount');",
+                  "  pm.expect(json.user).to.have.property('followingCount');",
+                  "});",
+                  "if (json && json.user && json.user._id) {",
+                  "  pm.collectionVariables.set('memberUserId', json.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}"
+          }
+        },
+        {
+          "name": "Get Public Profile Anonymously",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 (no auth required)', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('isFollowing is false (anonymous viewer)', () => {",
+                  "  pm.expect(json.user.isFollowing).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}"
+          }
+        },
+        {
+          "name": "Get User Posts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('paginated response with posts array', () => {",
+                  "  pm.expect(json).to.have.property('posts');",
+                  "  pm.expect(json).to.have.property('totalPages');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}/posts?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Mod Follows Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('success is true', () => pm.expect(json.success).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}/follow"
+          }
+        },
+        {
+          "name": "Mod Follows Member Again Is Idempotent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('alreadyFollowing flag returned', () => {",
+                  "  pm.expect(json.alreadyFollowing).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}/follow"
+          }
+        },
+        {
+          "name": "Get Member Followers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('mod is in followers list', () => {",
+                  "  const modUsername = pm.collectionVariables.get('modUsername');",
+                  "  const usernames = json.followers.map(f => f.username);",
+                  "  pm.expect(usernames).to.include(modUsername);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}/followers"
+          }
+        },
+        {
+          "name": "Get Mod Following",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('member is in following list', () => {",
+                  "  const memberUsername = pm.collectionVariables.get('memberUsername');",
+                  "  const usernames = json.following.map(f => f.username);",
+                  "  pm.expect(usernames).to.include(memberUsername);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reddit/users/{{modUsername}}/following"
+          }
+        },
+        {
+          "name": "Cannot Follow Yourself",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/users/{{modUsername}}/follow"
+          }
+        },
+        {
+          "name": "Mod Unfollows Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/users/{{memberUsername}}/follow"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Chat",
+      "item": [
+        {
+          "name": "Start Conversation (Mod with Member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('conversation has _id and 2 participants', () => {",
+                  "  pm.expect(json.data.conversation).to.have.property('_id');",
+                  "  pm.expect(json.data.conversation.participants).to.have.lengthOf(2);",
+                  "});",
+                  "pm.collectionVariables.set('conversationId', json.data.conversation._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberUserId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/reddit/chat/conversations"
+          }
+        },
+        {
+          "name": "Start Conversation Again Returns Same",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('returns the existing conversationId', () => {",
+                  "  const stored = pm.collectionVariables.get('conversationId');",
+                  "  pm.expect(json.data.conversation._id).to.eql(stored);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberUserId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/reddit/chat/conversations"
+          }
+        },
+        {
+          "name": "Cannot Start Conversation With Yourself",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberUserId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/reddit/chat/conversations"
+          }
+        },
+        {
+          "name": "List Mod Conversations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('conversations array, with partner field set', () => {",
+                  "  pm.expect(json.data.conversations).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(json.data.conversations[0]).to.have.property('partner');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/chat/conversations"
+          }
+        },
+        {
+          "name": "List Conversation Messages (empty)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('messages array exists', () => {",
+                  "  pm.expect(json.data.messages).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/chat/conversations/{{conversationId}}/messages"
+          }
+        },
+        {
+          "name": "Outsider Cannot Read Conversation (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{outsiderToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/chat/conversations/{{conversationId}}/messages"
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('returns unreadCount number', () => {",
+                  "  pm.expect(json.data.unreadCount).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/chat/unread-count"
+          }
+        },
+        {
+          "name": "Invalid Conversation ID Returns 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{modToken}}" }
+            ],
+            "url": "{{baseUrl}}/reddit/chat/conversations/not-a-valid-id/messages"
+          }
+        }
+      ]
+    }
+  ]
+}

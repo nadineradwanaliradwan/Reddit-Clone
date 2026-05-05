@@ -40,6 +40,10 @@ const authLimiter = rateLimit({
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ success: true, message: 'API is running' }));
 app.use('/reddit/auth', authLimiter, authRoutes);
+// Public profile/follow-list routes — must be mounted BEFORE the protected
+// `userRoutes` mount, otherwise `protect` rejects the request before it can
+// reach these GETs. See Routes/userRoute.js for the split.
+app.use('/reddit/users', userRoutes.publicRouter);
 app.use('/reddit/users', protect, userRoutes);
 app.use('/reddit/admin', adminRoutes);
 app.use('/reddit/communities', communityRoutes);

@@ -11,6 +11,7 @@ import { SearchPage } from '@/pages/SearchPage'
 import { SubmitPostPage } from '@/pages/SubmitPostPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
+import { ChatPage } from '@/pages/ChatPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -41,6 +42,8 @@ export const router = createBrowserRouter([
       { path: 'submit', element: <PrivateRoute><SubmitPostPage /></PrivateRoute> },
       { path: 'settings', element: <PrivateRoute><SettingsPage /></PrivateRoute> },
       { path: 'notifications', element: <PrivateRoute><NotificationsPage /></PrivateRoute> },
+      { path: 'chat', element: <PrivateRoute><ChatPage /></PrivateRoute> },
+      { path: 'chat/:conversationId', element: <PrivateRoute><ChatPage /></PrivateRoute> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

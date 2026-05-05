@@ -1,5 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, Plus, Bell, Menu, Moon, Sun } from 'lucide-react'
+import { Search, Plus, Bell, Menu, Moon, Sun, MessageCircle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { chatService } from '@/api/chat-service'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -17,6 +19,12 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const { data: unreadCount = 0 } = useUnreadCountQuery()
+  const { data: chatUnread = 0 } = useQuery({
+    queryKey: ['chat-unread'],
+    queryFn: chatService.unreadCount,
+    enabled: !!user,
+    refetchInterval: 30_000, // poll every 30s as a safety net for socket misses
+  })
 
   const onSearch = (event: React.FormEvent) => {
     event.preventDefault()
@@ -44,6 +52,7 @@ export function Navbar() {
                 <Link to="/popular" className="text-sm font-medium hover:text-primary">Popular</Link>
                 <Link to="/explore" className="text-sm font-medium hover:text-primary">Explore</Link>
                 <Link to="/communities" className="text-sm font-medium hover:text-primary">Communities</Link>
+                {user && <Link to="/chat" className="text-sm font-medium hover:text-primary">Chat</Link>}
                 <Link to="/settings" className="text-sm font-medium hover:text-primary">Settings</Link>
               </div>
             </SheetContent>
@@ -71,6 +80,16 @@ export function Navbar() {
               <Link to="/submit">
                 <Button variant="ghost" size="icon" aria-label="Create post">
                   <Plus className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link to="/chat">
+                <Button variant="ghost" size="icon" className="relative" aria-label="Open chat">
+                  <MessageCircle className="h-5 w-5" />
+                  {chatUnread > 0 && (
+                    <span className="absolute top-1.5 right-1.5 min-w-[1rem] h-4 px-1 text-[10px] font-bold bg-primary text-primary-foreground rounded-full border-2 border-background flex items-center justify-center">
+                      {chatUnread > 9 ? '9+' : chatUnread}
+                    </span>
+                  )}
                 </Button>
               </Link>
               <Link to="/notifications">
